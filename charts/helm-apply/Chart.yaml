@@ -1,0 +1,12 @@
+apiVersion: v2
+name: helm-locker
+description: Helm Locker - Declarative Helm
+version: 0.0.1
+appVersion: 0.0.1
+# icon: https://charts.rancher.io/assets/logos/helm-locker.svg
+annotations:
+  catalog.cattle.io/certified: rancher
+  catalog.cattle.io/release-name: helm-locker
+  catalog.cattle.io/provides-gvr: release.helm.cattle.io/v1alpha1
+  catalog.cattle.io/os: linux,windows
+  catalog.cattle.io/permits-os: linux,windows

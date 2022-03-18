@@ -1,0 +1,8 @@
+kind: HelmRelease
+apiVersion: helm.cattle.io/v1alpha1
+metadata:
+  name: my-release
+  namespace: cattle-helm-system
+spec:
+  release: test
+  namespace: default
