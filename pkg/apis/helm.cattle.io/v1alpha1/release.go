@@ -3,6 +3,8 @@ package v1alpha1
 import (
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rspb "helm.sh/helm/v3/pkg/release"
 )
 
 // +genclient
@@ -16,12 +18,19 @@ type HelmRelease struct {
 }
 
 type HelmReleaseSpec struct {
-	Name      string `json:"release"`
-	Namespace string `json:"namespace"`
+	Release ReleaseKey `json:"release,omitempty"`
+}
+
+type ReleaseKey struct {
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 type HelmReleaseStatus struct {
-	ReleaseStatus bool `json:"releaseStatus"`
+	Version     int         `json:"version,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Status      rspb.Status `json:"status,omitempty"`
+	Notes       string      `json:"notes,omitempty"`
 
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 }

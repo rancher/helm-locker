@@ -1,9 +1,19 @@
 package parser
 
 import (
+	"bytes"
+
 	"github.com/rancher/wrangler/pkg/objectset"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/resource"
+	"k8s.io/kubectl/pkg/scheme"
+)
+
+var (
+	decoder = scheme.Codecs.UniversalDeserializer()
 )
 
 type ObjectSetParser interface {
@@ -25,29 +35,17 @@ type parser struct {
 }
 
 func (p parser) Parse(manifest string, opts ObjectSetParserOptions) (*objectset.ObjectSet, error) {
-	if len(opts.Namespace) == 0 {
-		opts.Namespace = "default"
-	}
-	if opts.LabelSelector == nil {
-		opts.LabelSelector = labels.Everything()
-	}
-
-	r := p.Unstructured().
-		ContinueOnError().
-		NamespaceParam(opts.Namespace).DefaultNamespace().
-		LabelSelectorParam(opts.LabelSelector.String()).
-		Flatten().
-		Do()
-
-	objInfos, err := r.Infos()
-	if err != nil {
-		return nil, err
-	}
-
+	var u unstructured.Unstructured
+	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(manifest)), 1000)
 	os := objectset.NewObjectSet()
-	for _, oi := range objInfos {
-		os = os.Add(oi.Object)
+	for {
+		uCopy := u.DeepCopy()
+		err := decoder.Decode(uCopy)
+		if err != nil {
+			break
+		}
+		os = os.Add(uCopy)
+		logrus.Debugf("obj: %s", uCopy)
 	}
-
 	return os, nil
 }

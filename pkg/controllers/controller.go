@@ -34,9 +34,9 @@ type appContext struct {
 	K8s  kubernetes.Interface
 	Core corecontrollers.Interface
 
-	Apply                  apply.Apply
-	ObjectSetParser        parser.ObjectSetParser
-	LockedObjectSetManager *objectset.LockedObjectSetManager
+	Apply             apply.Apply
+	ObjectSetParser   parser.ObjectSetParser
+	ObjectSetRegister objectset.ObjectSetRegister
 
 	ClientConfig            clientcmd.ClientConfig
 	Discovery               *discovery.DiscoveryClient
@@ -66,7 +66,7 @@ func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientC
 		appCtx.Core.Secret(),
 		appCtx.Core.Secret().Cache(),
 		appCtx.ObjectSetParser,
-		appCtx.LockedObjectSetManager,
+		appCtx.ObjectSetRegister,
 	)
 
 	leader.RunOrDie(ctx, systemNamespace, "helm-locker-lock", appCtx.K8s, func(ctx context.Context) {
@@ -134,7 +134,7 @@ func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, e
 
 	apply := apply.New(discovery, apply.NewClientFactory(client))
 
-	lockedObjectSetManager := objectset.NewLockedObjectSetManager(apply, scf)
+	objectSet, objectSetRegister := objectset.NewObjectSetController("object-set-controller", apply, scf, nil)
 
 	objectSetParser := parser.NewObjectSetParser(
 		restclientgetter.New(client, discovery),
@@ -146,14 +146,15 @@ func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, e
 		K8s:  k8s,
 		Core: corev,
 
-		Apply:                  apply,
-		ObjectSetParser:        objectSetParser,
-		LockedObjectSetManager: lockedObjectSetManager,
+		Apply:             apply,
+		ObjectSetParser:   objectSetParser,
+		ObjectSetRegister: objectSetRegister,
 
 		ClientConfig:            cfg,
 		SharedControllerFactory: scf,
 		Discovery:               discovery,
 		starters: []start.Starter{
+			objectSet,
 			core,
 			helm,
 		},

@@ -1,45 +1,42 @@
 package release
 
 import (
-	"bytes"
-	"compress/gzip"
-	"encoding/base64"
-	"encoding/json"
-	"io/ioutil"
+	"fmt"
 
-	rspb "helm.sh/helm/v3/pkg/release"
+	"github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
+	"github.com/rancher/wrangler/pkg/relatedresource"
+	v1 "k8s.io/api/core/v1"
 )
 
-// decodeRelease decodes the bytes of data into a release
-// type. Data must contain a base64 encoded gzipped string of a
-// valid release, otherwise an error is returned.
-func decodeRelease(data string) (*rspb.Release, error) {
-	// base64 decode string
-	b, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
-		return nil, err
-	}
+const (
+	HelmReleaseSecretType = "helm.sh/release.v1"
+)
 
-	// For backwards compatibility with releases that were stored before
-	// compression was introduced we skip decompression if the
-	// gzip magic header is not found
-	if bytes.Equal(b[0:3], []byte{0x1f, 0x8b, 0x08}) {
-		r, err := gzip.NewReader(bytes.NewReader(b))
-		if err != nil {
-			return nil, err
-		}
-		defer r.Close()
-		b2, err := ioutil.ReadAll(r)
-		if err != nil {
-			return nil, err
-		}
-		b = b2
-	}
+func releaseKeyToString(key relatedresource.Key) string {
+	return fmt.Sprintf("%s/%s", key.Namespace, key.Name)
+}
 
-	var rls rspb.Release
-	// unmarshal release object bytes
-	if err := json.Unmarshal(b, &rls); err != nil {
-		return nil, err
+func releaseKeyFromRelease(release *v1alpha1.HelmRelease) relatedresource.Key {
+	return relatedresource.Key{
+		Namespace: release.Spec.Release.Namespace,
+		Name:      release.Spec.Release.Name,
 	}
-	return &rls, nil
+}
+
+func releaseKeyFromSecret(secret *v1.Secret) *relatedresource.Key {
+	if !isHelmReleaseSecret(secret) {
+		return nil
+	}
+	releaseNameFromLabel, ok := secret.GetLabels()["name"]
+	if !ok {
+		return nil
+	}
+	return &relatedresource.Key{
+		Namespace: secret.GetNamespace(),
+		Name:      releaseNameFromLabel,
+	}
+}
+
+func isHelmReleaseSecret(secret *v1.Secret) bool {
+	return secret.Type == HelmReleaseSecretType
 }

@@ -4,5 +4,6 @@ metadata:
   name: my-release
   namespace: cattle-helm-system
 spec:
-  release: test
-  namespace: default
+  release: 
+    name: test
+    namespace: default

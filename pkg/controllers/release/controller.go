@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
 	helmcontrollers "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
@@ -11,14 +12,13 @@ import (
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
-	rspb "helm.sh/helm/v3/pkg/release"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
-	HelmReleaseBySecret   = "v1alpha1.cattle.io/helm-release-by-secret"
-	HelmReleaseSecretType = "v1alpha1.sh/release.v1"
+	HelmReleaseByReleaseKey = "v1alpha1.cattle.io/helm-release-by-release-key"
+	HelmSecretByReleaseKey  = "v1alpha1.cattle.io/helm-secret-by-release-key"
 )
 
 type handler struct {
@@ -29,8 +29,8 @@ type handler struct {
 	secrets          corecontrollers.SecretController
 	secretCache      corecontrollers.SecretCache
 
-	objectSetParser        parser.ObjectSetParser
-	lockedObjectSetManager *objectset.LockedObjectSetManager
+	objectSetParser   parser.ObjectSetParser
+	objectSetRegister objectset.ObjectSetRegister
 }
 
 func Register(
@@ -41,32 +41,28 @@ func Register(
 	secrets corecontrollers.SecretController,
 	secretCache corecontrollers.SecretCache,
 	objectSetParser parser.ObjectSetParser,
-	lockedObjectSetManager *objectset.LockedObjectSetManager,
+	objectSetRegister objectset.ObjectSetRegister,
 ) {
 
 	h := &handler{
-		systemNamespace:  systemNamespace,
+		systemNamespace: systemNamespace,
+
 		helmReleases:     helmReleases,
 		helmReleaseCache: helmReleaseCache,
 		secrets:          secrets,
 		secretCache:      secretCache,
+
+		objectSetParser:   objectSetParser,
+		objectSetRegister: objectSetRegister,
 	}
 
-	helmReleaseCache.AddIndexer(HelmReleaseBySecret, h.helmReleaseBySecret)
+	secretCache.AddIndexer(HelmSecretByReleaseKey, secretsToReleaseKey)
+	helmReleaseCache.AddIndexer(HelmReleaseByReleaseKey, helmReleaseToReleaseKey)
+
 	relatedresource.Watch(ctx, "on-helm-secret-change", h.resolveHelmRelease, helmReleases, secrets)
 
 	helmReleases.OnChange(ctx, "apply-lock-on-release", h.OnHelmRelease)
-}
-
-func (h *handler) helmReleaseBySecret(helmRelease *v1alpha1.HelmRelease) ([]string, error) {
-	if helmRelease == nil {
-		return nil, nil
-	}
-	secretNamespace := helmRelease.Spec.Namespace
-	secretName := helmRelease.Spec.Name
-	return []string{
-		getKey(secretNamespace, secretName),
-	}, nil
+	helmReleases.OnRemove(ctx, "on-remove", h.OnHelmReleaseRemove)
 }
 
 func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj runtime.Object) ([]relatedresource.Key, error) {
@@ -74,14 +70,12 @@ func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj run
 	if !ok {
 		return nil, nil
 	}
-	if secret.Type != HelmReleaseSecretType {
+	releaseKey := releaseKeyFromSecret(secret)
+	if releaseKey == nil {
+		// No release found matching this secret
 		return nil, nil
 	}
-
-	helmReleases, err := h.helmReleaseCache.GetByIndex(
-		HelmReleaseBySecret,
-		getKey(secretNamespace, secretName),
-	)
+	helmReleases, err := h.helmReleaseCache.GetByIndex(HelmReleaseByReleaseKey, releaseKeyToString(*releaseKey))
 	if err != nil {
 		return nil, err
 	}
@@ -97,68 +91,63 @@ func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj run
 	return keys, nil
 }
 
-func getKey(namespace string, name string) string {
-	return fmt.Sprintf("%s/%s", namespace, name)
+func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
+	releaseKey := releaseKeyFromRelease(helmRelease)
+	h.objectSetRegister.Delete(releaseKey)
+	return nil, nil
 }
 
 func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
 	if helmRelease == nil || helmRelease.DeletionTimestamp != nil {
 		return nil, nil
 	}
-	secretNamespace := helmRelease.Spec.Namespace
-	secretName := helmRelease.Spec.Name
-	secretKey := relatedresource.Key{
-		Namespace: secretNamespace,
-		Name:      secretName,
-	}
-	helmReleaseSecret, err := h.secretCache.Get(secretNamespace, secretName)
+	releaseKey := releaseKeyFromRelease(helmRelease)
+	helmReleaseSecrets, err := h.secretCache.GetByIndex(HelmSecretByReleaseKey, releaseKeyToString(releaseKey))
 	if err != nil {
-		// TODO: add status
-		return helmRelease, fmt.Errorf("unable to find Helm Release Secret (%s/%s) for HelmRelease %s", secretNamespace, secretName, helmRelease.GetName())
+		return helmRelease, fmt.Errorf("unable to find Helm Release Secret tied to Helm Release %s: %s", helmRelease.GetName(), err)
 	}
-	if helmReleaseSecret.Type != HelmReleaseSecretType {
-		// TODO: add status
-		return helmRelease, fmt.Errorf(
-			"unable to parse contents of Secret (%s/%s) that HelmRelease %s points to: not a Helm secret, found type %s instead of %s",
-			secretNamespace, secretName, helmRelease.GetName(), helmReleaseSecret.Type, HelmReleaseSecretType,
-		)
+	if len(helmReleaseSecrets) == 0 {
+		return helmRelease, fmt.Errorf("could not find any Helm Release Secrets tied to HelmRelease %s", helmRelease.GetName())
 	}
-	releaseData, ok := helmReleaseSecret.Data["release"]
-	if !ok {
-		// TODO: add status
-		return helmRelease, fmt.Errorf(
-			"unable to parse contents of Secret (%s/%s) that HelmRelease %s points to: could not find key 'release' in Secret",
-			secretNamespace, secretName, helmRelease.GetName(),
-		)
+	var helmReleaseSecret *v1.Secret
+	var latestVersion, currVersion int
+	for _, secret := range helmReleaseSecrets {
+		version, ok := secret.Labels["version"]
+		if !ok {
+			// ignore if the version is not set, which is unexpected
+			logrus.Debugf("could not identify release version tied to Helm release secret %s/%s: version label does not exist", secret.GetNamespace(), secret.GetName())
+			continue
+		}
+		currVersion, err = strconv.Atoi(version)
+		if err != nil {
+			logrus.Debugf("could not identify release version tied to Helm release secret %s/%s: %s", secret.GetNamespace(), secret.GetName(), err)
+		}
+		if currVersion > latestVersion {
+			latestVersion = currVersion
+			helmReleaseSecret = secret
+		}
 	}
-	release, err := decodeRelease(string(releaseData))
+	logrus.Infof("loading latest release version %d of HelmRelease %s", currVersion, helmRelease.GetName())
+	releaseInfo, err := NewReleaseInfo(helmReleaseSecret)
 	if err != nil {
-		// TODO: add status
-		return helmRelease, fmt.Errorf(
-			"unable to parse contents of Secret (%s/%s) that HelmRelease %s points to: could not decode contents of 'release' key in Secret",
-			secretNamespace, secretName, helmRelease.GetName(),
-		)
+		return helmRelease, err
 	}
-	if release.Info.Status != rspb.StatusDeployed {
+	helmRelease, err = h.helmReleases.UpdateStatus(releaseInfo.SetStatus(helmRelease))
+	if err != nil {
+		return helmRelease, fmt.Errorf("unable to update status of HelmRelease %s: %s", helmRelease.GetName(), err)
+	}
+	if !releaseInfo.Locked() {
 		// TODO: add status
-		logrus.Infof("detected HelmRelease %s is not deployed (status is %s), unlocking release", helmRelease, release.Info.Status)
-		h.lockedObjectSetManager.Unlock(secretKey)
+		logrus.Infof("detected HelmRelease %s is not deployed (status is %s), unlocking release", helmRelease.GetName(), releaseInfo.Status)
+		h.objectSetRegister.Unlock(releaseKey)
 		return helmRelease, nil
 	}
-	logrus.Infof("detected HelmRelease %s is deployed, locking release")
-	manifestOS, err := h.objectSetParser.Parse(release.Manifest, parser.ObjectSetParserOptions{})
+	manifestOS, err := h.objectSetParser.Parse(releaseInfo.Manifest, parser.ObjectSetParserOptions{})
 	if err != nil {
 		// TODO: add status
-		return helmRelease, fmt.Errorf(
-			"unable to parse objectset from manifest contained in Secret (%s/%s) that HelmRelease %s points to: %s",
-			secretNamespace, secretName, helmRelease.GetName(), err,
-		)
+		return helmRelease, fmt.Errorf("unable to parse objectset from manifest for HelmRelease %s: %s", helmRelease.GetName(), err)
 	}
-	if err := h.lockedObjectSetManager.Apply(secretKey, manifestOS); err != nil {
-		return helmRelease, fmt.Errorf(
-			"unable to apply objectset from manifest contained in Secret (%s/%s) that HelmRelease %s points to: %s",
-			secretNamespace, secretName, helmRelease.GetName(), err,
-		)
-	}
+	logrus.Infof("detected HelmRelease %s is deployed, locking release %s with %d objects", helmRelease.GetName(), releaseKey, len(manifestOS.All()))
+	h.objectSetRegister.Lock(releaseKey, manifestOS)
 	return helmRelease, nil
 }
