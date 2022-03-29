@@ -8,7 +8,7 @@ import (
 	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
 	helmcontrollers "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
 	"github.com/aiyengar2/helm-locker/pkg/objectset"
-	"github.com/aiyengar2/helm-locker/pkg/parser"
+	"github.com/aiyengar2/helm-locker/pkg/objectset/parser"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
@@ -29,8 +29,7 @@ type handler struct {
 	secrets          corecontrollers.SecretController
 	secretCache      corecontrollers.SecretCache
 
-	objectSetParser   parser.ObjectSetParser
-	objectSetRegister objectset.ObjectSetRegister
+	lockableObjectSetRegister objectset.LockableObjectSetRegister
 }
 
 func Register(
@@ -40,8 +39,7 @@ func Register(
 	helmReleaseCache helmcontrollers.HelmReleaseCache,
 	secrets corecontrollers.SecretController,
 	secretCache corecontrollers.SecretCache,
-	objectSetParser parser.ObjectSetParser,
-	objectSetRegister objectset.ObjectSetRegister,
+	lockableObjectSetRegister objectset.LockableObjectSetRegister,
 ) {
 
 	h := &handler{
@@ -52,8 +50,7 @@ func Register(
 		secrets:          secrets,
 		secretCache:      secretCache,
 
-		objectSetParser:   objectSetParser,
-		objectSetRegister: objectSetRegister,
+		lockableObjectSetRegister: lockableObjectSetRegister,
 	}
 
 	secretCache.AddIndexer(HelmSecretByReleaseKey, secretsToReleaseKey)
@@ -93,7 +90,7 @@ func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj run
 
 func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
 	releaseKey := releaseKeyFromRelease(helmRelease)
-	h.objectSetRegister.Delete(releaseKey)
+	h.lockableObjectSetRegister.Delete(releaseKey)
 	return nil, nil
 }
 
@@ -139,15 +136,15 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 	if !releaseInfo.Locked() {
 		// TODO: add status
 		logrus.Infof("detected HelmRelease %s is not deployed (status is %s), unlocking release", helmRelease.GetName(), releaseInfo.Status)
-		h.objectSetRegister.Unlock(releaseKey)
+		h.lockableObjectSetRegister.Unlock(releaseKey)
 		return helmRelease, nil
 	}
-	manifestOS, err := h.objectSetParser.Parse(releaseInfo.Manifest, parser.ObjectSetParserOptions{})
+	manifestOS, err := parser.Parse(releaseInfo.Manifest)
 	if err != nil {
 		// TODO: add status
 		return helmRelease, fmt.Errorf("unable to parse objectset from manifest for HelmRelease %s: %s", helmRelease.GetName(), err)
 	}
 	logrus.Infof("detected HelmRelease %s is deployed, locking release %s with %d objects", helmRelease.GetName(), releaseKey, len(manifestOS.All()))
-	h.objectSetRegister.Lock(releaseKey, manifestOS)
+	h.lockableObjectSetRegister.Lock(releaseKey, manifestOS)
 	return helmRelease, nil
 }

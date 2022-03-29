@@ -5,6 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// addData adds initial data to the cluster that should be added on starting this program
 func addData(systemNamespace string, appCtx *appContext) error {
 	// TBD: Fill in with resources that need to be added on init, such as the Federation PrometheusRule
 	return appCtx.Apply.

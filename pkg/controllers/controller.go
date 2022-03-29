@@ -8,8 +8,6 @@ import (
 	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io"
 	helmcontrollers "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
 	"github.com/aiyengar2/helm-locker/pkg/objectset"
-	"github.com/aiyengar2/helm-locker/pkg/parser"
-	"github.com/aiyengar2/helm-locker/pkg/restclientgetter"
 	"github.com/rancher/lasso/pkg/cache"
 	"github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/controller"
@@ -35,8 +33,7 @@ type appContext struct {
 	Core corecontrollers.Interface
 
 	Apply             apply.Apply
-	ObjectSetParser   parser.ObjectSetParser
-	ObjectSetRegister objectset.ObjectSetRegister
+	ObjectSetRegister objectset.LockableObjectSetRegister
 
 	ClientConfig            clientcmd.ClientConfig
 	Discovery               *discovery.DiscoveryClient
@@ -65,7 +62,6 @@ func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientC
 		appCtx.HelmRelease().Cache(),
 		appCtx.Core.Secret(),
 		appCtx.Core.Secret().Cache(),
-		appCtx.ObjectSetParser,
 		appCtx.ObjectSetRegister,
 	)
 
@@ -134,11 +130,7 @@ func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, e
 
 	apply := apply.New(discovery, apply.NewClientFactory(client))
 
-	objectSet, objectSetRegister := objectset.NewObjectSetController("object-set-controller", apply, scf, nil)
-
-	objectSetParser := parser.NewObjectSetParser(
-		restclientgetter.New(client, discovery),
-	)
+	objectSet, objectSetRegister := objectset.NewLockableObjectSetRegister("object-set-register", apply, scf, nil)
 
 	return &appContext{
 		Interface: helmv,
@@ -147,7 +139,6 @@ func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, e
 		Core: corev,
 
 		Apply:             apply,
-		ObjectSetParser:   objectSetParser,
 		ObjectSetRegister: objectSetRegister,
 
 		ClientConfig:            cfg,

@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// List returns the set of CRDs that need to be generated
 func List() []crd.CRD {
 	return []crd.CRD{
 		newCRD(&v1alpha1.HelmRelease{}, func(c crd.CRD) crd.CRD {
@@ -18,6 +19,7 @@ func List() []crd.CRD {
 	}
 }
 
+// Create creates the necessary CRDs on starting this program onto the target cluster
 func Create(ctx context.Context, cfg *rest.Config) error {
 	factory, err := crd.NewFactoryFromClient(cfg)
 	if err != nil {
@@ -27,6 +29,8 @@ func Create(ctx context.Context, cfg *rest.Config) error {
 	return factory.BatchCreateCRDs(ctx, List()...).BatchWait()
 }
 
+// newCRD returns the CustomResourceDefinition of an object that is customized
+// according to the provided customize function
 func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {
 	crd := crd.CRD{
 		GVK: schema.GroupVersionKind{
