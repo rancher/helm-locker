@@ -19,7 +19,6 @@ type GVKResolver func(gvk schema.GroupVersionKind, namespace, name string, _ run
 // ForGVK returns the relatedresource.Resolver for a particular GVK
 func (r GVKResolver) ForGVK(gvk schema.GroupVersionKind) relatedresource.Resolver {
 	return func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
-		logrus.Infof("called resolver for gvk %s", gvk)
 		return r(gvk, namespace, name, obj)
 	}
 }
@@ -37,7 +36,7 @@ type GVKWatcher interface {
 
 // NewGVKWatcher returns an object that satisfies the GVKWatcher interface
 func NewGVKWatcher(scf controller.SharedControllerFactory, gvkResolver GVKResolver, enqueuer relatedresource.Enqueuer) GVKWatcher {
-	return &gvkWatcher{
+	return &watcher{
 		scf:         scf,
 		gvkResolver: gvkResolver,
 		enqueuer:    enqueuer,
@@ -47,8 +46,8 @@ func NewGVKWatcher(scf controller.SharedControllerFactory, gvkResolver GVKResolv
 	}
 }
 
-// gvkWatcher is a GVKWatcher based on a provided resolver and enqueuer
-type gvkWatcher struct {
+// watcher is a GVKWatcher based on a provided resolver and enqueuer
+type watcher struct {
 
 	// scf is the controller.SharedControllerFactory to use to generate controllers from
 	scf controller.SharedControllerFactory
@@ -77,7 +76,7 @@ type gvkWatcher struct {
 }
 
 // Watch begins watching a GVK or defers its start for after Start is called
-func (w *gvkWatcher) Watch(gvk schema.GroupVersionKind) error {
+func (w *watcher) Watch(gvk schema.GroupVersionKind) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	w.gvkRegistered[gvk] = true
@@ -85,7 +84,7 @@ func (w *gvkWatcher) Watch(gvk schema.GroupVersionKind) error {
 }
 
 // Start begins watching all registered GVKs
-func (w *gvkWatcher) Start(ctx context.Context, workers int) error {
+func (w *watcher) Start(ctx context.Context, workers int) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	w.started = true
@@ -101,7 +100,7 @@ func (w *gvkWatcher) Start(ctx context.Context, workers int) error {
 }
 
 // startGVK starts watching a particular GVK if the GVKWatcher has been started
-func (w *gvkWatcher) startGVK(gvk schema.GroupVersionKind) error {
+func (w *watcher) startGVK(gvk schema.GroupVersionKind) error {
 	if !w.started {
 		return nil
 	}

@@ -104,7 +104,10 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 		return helmRelease, fmt.Errorf("unable to find Helm Release Secret tied to Helm Release %s: %s", helmRelease.GetName(), err)
 	}
 	if len(helmReleaseSecrets) == 0 {
-		return helmRelease, fmt.Errorf("could not find any Helm Release Secrets tied to HelmRelease %s", helmRelease.GetName())
+		logrus.Errorf("could not find any Helm Release Secrets tied to HelmRelease %s", helmRelease.GetName())
+		h.lockableObjectSetRegister.Delete(releaseKey)
+		helmRelease.Status.ReleaseStatus = "SecretNotFound"
+		return h.helmReleases.UpdateStatus(helmRelease)
 	}
 	var helmReleaseSecret *v1.Secret
 	var latestVersion, currVersion int

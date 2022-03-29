@@ -29,6 +29,21 @@ Therefore, if Helm Locker observes a Helm Release Secret tied to a `HelmRelease`
 
 However, once a release is `deployed`, if what is tracked in the Helm secret is different than what is currently installed onto the cluster, Helm Locker will revert all resources back to what was tracked by the Helm release (in case a change was made to the resource tracked by the Helm Release while the release was being modified).
 
+## Debugging
+
+### How do I manually inspect the content of the Helm Release Secret to debug a possible Helm Locker issue?
+
+Identify the release namespace (`RELEASE_NAMESPACE`), release name (`RELEASE_NAME`), and release version (`RELEASE_VERSION`) that identifies the Secret used by Helm to store the release data. Then, with access to your Kubernetes cluster via `kubectl`, run the following command (e.g. run base64 decode, base64 decode, gzip decompress the .data.release of the Secret):
+
+```bash
+RELEASE_NAMESPACE=default
+RELEASE_NAME=test
+RELEASE_VERSION=v1
+
+# Magic one-liner! jq call is optional...
+kubectl get secrets -n ${RELEASE_NAMESPACE} sh.helm.release.v1.${RELEASE_NAME}.${RELEASE_VERSION}. -o=jsonpath='{ .data.release }' | base64 -d | base64 -d | gunzip -c | jq -r '.'
+```
+
 ## Building
 
 `make`

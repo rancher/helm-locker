@@ -54,7 +54,16 @@ func (i *releaseInfo) Locked() bool {
 func (i *releaseInfo) SetStatus(helmRelease *v1alpha1.HelmRelease) *v1alpha1.HelmRelease {
 	helmRelease.Status.Version = i.Version
 	helmRelease.Status.Description = i.Description
-	helmRelease.Status.Status = i.Status
+	switch i.Status {
+	case rspb.StatusDeployed:
+		helmRelease.Status.ReleaseStatus = "Deployed"
+	case rspb.StatusFailed:
+		helmRelease.Status.ReleaseStatus = "Failed"
+	case rspb.StatusUninstalling, rspb.StatusPendingInstall, rspb.StatusPendingUpgrade, rspb.StatusPendingRollback:
+		helmRelease.Status.ReleaseStatus = "Transitioning"
+	default:
+		helmRelease.Status.ReleaseStatus = "ErrInvalidRelease"
+	}
 	helmRelease.Status.Notes = i.Notes
 	return helmRelease
 }

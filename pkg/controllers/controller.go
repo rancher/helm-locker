@@ -130,7 +130,7 @@ func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, e
 
 	apply := apply.New(discovery, apply.NewClientFactory(client))
 
-	objectSet, objectSetRegister := objectset.NewLockableObjectSetRegister("object-set-register", apply, scf, nil)
+	objectSet, objectSetRegister := objectset.NewLockableObjectSetRegister("object-set-register", apply, scf, discovery, nil)
 
 	return &appContext{
 		Interface: helmv,

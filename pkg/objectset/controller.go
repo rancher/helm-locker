@@ -4,24 +4,36 @@ import (
 	"context"
 	"time"
 
+	"github.com/aiyengar2/helm-locker/pkg/gvk"
+	"github.com/aiyengar2/helm-locker/pkg/informerfactory"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/start"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/workqueue"
 )
 
 // NewLockableObjectSetRegister returns a starter that starts an ObjectSetController listening to events on ObjectSetStates
 // and a LockableObjectSetRegister that allows you to register new states for ObjectSets in memory
-func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller.SharedControllerFactory, opts *controller.Options) (start.Starter, LockableObjectSetRegister) {
+func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller.SharedControllerFactory, discovery discovery.DiscoveryInterface, opts *controller.Options) (start.Starter, LockableObjectSetRegister) {
 	// Define a new cache
-	register, cache := newLockableObjectSetRegisterAndCache(scf)
+	apply = apply.WithCacheTypeFactory(informerfactory.New(scf))
+
+	handler := handler{
+		apply:     apply,
+		gvkLister: gvk.NewGVKLister(discovery),
+	}
+
+	objectSetRegister, objectSetCache := newLockableObjectSetRegisterAndCache(scf, handler.OnRemove)
 	startCache := func(ctx context.Context) error {
-		go cache.Run(ctx.Done())
+		go objectSetCache.Run(ctx.Done())
 		return nil
 	}
+
 	// Define a new controller that responds to events from the cache
-	objectSetController := controller.New(name, cache, startCache, objectSetStateHandlerFunc(apply), applyDefaultOptions(opts))
-	return wrapStarter(objectSetController), register
+	objectSetController := controller.New(name, objectSetCache, startCache, &handler, applyDefaultOptions(opts))
+
+	return wrapStarter(objectSetController), objectSetRegister
 }
 
 // applyDefaultOptions applies default controller options if none are provided

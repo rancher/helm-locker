@@ -14,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 )
@@ -38,12 +37,14 @@ type LockableObjectSetRegister interface {
 // 2) a cache.SharedIndexInformer that listens to events on objectSetStates that are created from interacting with the provided register
 //
 // Note: This function is intentionally internal since the cache.SharedIndexInformer responds to an internal runtime.Object type (objectSetState)
-func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory) (LockableObjectSetRegister, cache.SharedIndexInformer) {
+func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory, triggerOnDelete func(string, *objectSetState)) (LockableObjectSetRegister, cache.SharedIndexInformer) {
 	c := lockableObjectSetRegisterAndCache{
-		stateByKey:            make(map[relatedresource.Key]objectSetState),
+		stateByKey:            make(map[relatedresource.Key]*objectSetState),
 		keyByResourceKeyByGVK: make(map[schema.GroupVersionKind]map[relatedresource.Key]relatedresource.Key),
 
 		stateChanges: make(chan watch.Event, 50),
+
+		triggerOnDelete: triggerOnDelete,
 	}
 	// initialize watcher that populates watch queue
 	c.gvkWatcher = gvk.NewGVKWatcher(scf, c.Resolve, &c)
@@ -74,7 +75,7 @@ type lockableObjectSetRegisterAndCache struct {
 	startLock sync.RWMutex
 
 	// stateByKey is a map that keeps track of the desired state of the ObjectSetRegister
-	stateByKey map[relatedresource.Key]objectSetState
+	stateByKey map[relatedresource.Key]*objectSetState
 	// stateMapLock is a lock on the stateByKey map
 	stateMapLock sync.RWMutex
 
@@ -83,6 +84,9 @@ type lockableObjectSetRegisterAndCache struct {
 	keyByResourceKeyByGVK map[schema.GroupVersionKind]map[relatedresource.Key]relatedresource.Key
 	// keyMapLock is a lock on the keyByResourceKeyByGVK map
 	keyMapLock sync.RWMutex
+
+	// triggerOnDelete allows registering a function that gets called on a delete from the cache
+	triggerOnDelete func(key string, obj *objectSetState)
 }
 
 // init initializes the register and the cache
@@ -123,7 +127,9 @@ func (c *lockableObjectSetRegisterAndCache) List(options metav1.ListOptions) (ru
 	defer c.stateMapLock.RUnlock()
 	objectSetStateList := &objectSetStateList{}
 	for _, objectSetState := range c.stateByKey {
-		objectSetStateList.Items = append(objectSetStateList.Items, objectSetState)
+		if objectSetState != nil {
+			objectSetStateList.Items = append(objectSetStateList.Items, *objectSetState)
+		}
 	}
 	objectSetStateList.ResourceVersion = options.ResourceVersion
 	return objectSetStateList, nil
@@ -142,7 +148,7 @@ func (c *lockableObjectSetRegisterAndCache) Watch(options metav1.ListOptions) (w
 
 // Lock allows you to lock an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Lock(key relatedresource.Key, os *objectset.ObjectSet) {
-	logrus.Infof("locking %s", key)
+	logrus.Infof("locking %s/%s", key.Namespace, key.Name)
 
 	locked := true
 	c.setState(key, os, &locked)
@@ -151,7 +157,7 @@ func (c *lockableObjectSetRegisterAndCache) Lock(key relatedresource.Key, os *ob
 
 // Unlock allows you to unlock an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Unlock(key relatedresource.Key) {
-	logrus.Infof("unlocking %s", key)
+	logrus.Infof("unlocking %s/%s", key.Namespace, key.Name)
 
 	var locked bool
 	c.setState(key, nil, &locked)
@@ -160,17 +166,16 @@ func (c *lockableObjectSetRegisterAndCache) Unlock(key relatedresource.Key) {
 
 // Delete allows you to delete an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Delete(key relatedresource.Key) {
-	logrus.Infof("deleting %s", key)
+	logrus.Infof("deleting %s/%s", key.Namespace, key.Name)
 
-	c.deleteState(key)
+	s := c.deleteState(key)
 	c.unlock(key)
+	c.triggerOnDelete(fmt.Sprintf("%s/%s", key.Namespace, key.Name), s)
 }
 
 // Enqueue allows you to enqueue an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Enqueue(namespace, name string) {
 	key := keyFunc(namespace, name)
-	logrus.Infof("enqueuing %s", key)
-
 	c.setState(key, nil, nil)
 }
 
@@ -191,11 +196,12 @@ func (c *lockableObjectSetRegisterAndCache) Resolve(gvk schema.GroupVersionKind,
 		// do nothing since the resource is not tied to a set
 		return nil, nil
 	}
+	logrus.Infof("detected change in %s/%s (%s), enqueuing objectset %s/%s", namespace, name, gvk, key.Namespace, key.Name)
 	return []relatedresource.Key{key}, nil
 }
 
 // getState returns the underlying objectSetState for a given key
-func (c *lockableObjectSetRegisterAndCache) getState(key relatedresource.Key) (objectSetState, bool) {
+func (c *lockableObjectSetRegisterAndCache) getState(key relatedresource.Key) (*objectSetState, bool) {
 	c.stateMapLock.RLock()
 	defer c.stateMapLock.RUnlock()
 	state, ok := c.stateByKey[key]
@@ -205,58 +211,46 @@ func (c *lockableObjectSetRegisterAndCache) getState(key relatedresource.Key) (o
 // setState allows a user to set the objectSetState for a given key
 func (c *lockableObjectSetRegisterAndCache) setState(key relatedresource.Key, os *objectset.ObjectSet, locked *bool) {
 	// get old state and use as the base
-	oldObjectSetState, modifying := c.getState(key)
-
-	var objectMeta metav1.ObjectMeta
-	oldObjectSetState.ObjectMeta.DeepCopyInto(&objectMeta)
-	objectMeta.Name = key.Name
-	objectMeta.Namespace = key.Namespace
-	if modifying {
-		objectMeta.Generation = oldObjectSetState.Generation + 1
+	s, modifying := c.getState(key)
+	if !modifying {
+		s = newObjectSetState(key.Namespace, key.Name, objectSetState{})
 	} else {
-		// UID is tied to the address of the object that first loaded it
-		// If the controller restarts, UIDs will always be recreated since
-		// this controller is purely in memory
-		objectMeta.UID = types.UID(fmt.Sprintf("initial-object-set-%p", os))
-		objectMeta.CreationTimestamp = metav1.NewTime(time.Now())
+		s = s.DeepCopy()
+		s.Generation += 1
+		s.ResourceVersion = fmt.Sprintf("%d", s.Generation)
 	}
-	objectMeta.ResourceVersion = fmt.Sprintf("%d", objectMeta.Generation)
-
-	s := objectSetState{ObjectMeta: objectMeta}
-	if os == nil {
-		s.ObjectSet = oldObjectSetState.ObjectSet
-	} else {
+	if os != nil {
 		s.ObjectSet = os
 	}
 	if locked != nil {
 		s.Locked = *locked
-	} else {
-		s.Locked = oldObjectSetState.Locked
 	}
 	c.stateMapLock.Lock()
 	defer c.stateMapLock.Unlock()
 	if modifying {
-		c.stateChanges <- watch.Event{Type: watch.Modified, Object: &s}
+		c.stateChanges <- watch.Event{Type: watch.Modified, Object: s}
 	} else {
-		c.stateChanges <- watch.Event{Type: watch.Added, Object: &s}
+		c.stateChanges <- watch.Event{Type: watch.Added, Object: s}
 	}
 	c.stateByKey[key] = s
 	logrus.Debugf("set state for %s/%s: locked %t, os %p, objectMeta: %v", s.Namespace, s.Name, s.Locked, s.ObjectSet, s.ObjectMeta)
 }
 
 // deleteState deletes anything on the register for a given key
-func (c *lockableObjectSetRegisterAndCache) deleteState(key relatedresource.Key) {
+func (c *lockableObjectSetRegisterAndCache) deleteState(key relatedresource.Key) *objectSetState {
 	s, exists := c.getState(key)
 	if !exists {
 		// nothing to add, event was already processed
-		return
+		return nil
 	}
-	deletionTime := metav1.NewTime(time.Now())
-	s.DeletionTimestamp = &deletionTime
 	c.stateMapLock.Lock()
-	defer c.stateMapLock.Unlock()
-	c.stateChanges <- watch.Event{Type: watch.Deleted, Object: &s}
 	delete(c.stateByKey, key)
+	c.stateMapLock.Unlock()
+
+	s.ObjectSet = nil
+	s.Locked = false
+	c.stateChanges <- watch.Event{Type: watch.Deleted, Object: s}
+	return s
 }
 
 // lock adds entries to the register to ensure that resources tracked by this ObjectSet are resolved to this ObjectSet
@@ -325,7 +319,7 @@ func (c *lockableObjectSetRegisterAndCache) canLock(key relatedresource.Key, os 
 }
 
 // removeAllEntries removes all entries to the register tied to a particular ObjectSet by key
-// Note: This is a thread-unsafe version of delete
+// Note: This is a thread-unsafe version of
 func (c *lockableObjectSetRegisterAndCache) removeAllEntries(key relatedresource.Key) {
 	for gvk, keyByResourceKey := range c.keyByResourceKeyByGVK {
 		for resourceKey, currSetKey := range keyByResourceKey {

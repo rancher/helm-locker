@@ -5,3 +5,5 @@
 *.swp
 .idea
 helm-locker
+.vscode/
+.DS_Store

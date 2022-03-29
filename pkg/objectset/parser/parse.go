@@ -11,6 +11,8 @@ import (
 
 // Parse parses the runtime.Objects tracked in a Kubernetes manifest (represented as a string) into an ObjectSet
 func Parse(manifest string) (*objectset.ObjectSet, error) {
+	var multierr error
+
 	var u unstructured.Unstructured
 	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(manifest)), 1000)
 	os := objectset.NewObjectSet()
@@ -20,8 +22,12 @@ func Parse(manifest string) (*objectset.ObjectSet, error) {
 		if err != nil {
 			break
 		}
+		if uCopy.GetAPIVersion() == "" || uCopy.GetKind() == "" {
+			// Encountered empty YAML document but successfully decoded, skip
+			continue
+		}
 		os = os.Add(uCopy)
-		logrus.Debugf("obj: %s", uCopy)
+		logrus.Debugf("obj: %s, Kind=%s (%s/%s)", uCopy.GetAPIVersion(), uCopy.GetKind(), uCopy.GetName(), uCopy.GetNamespace())
 	}
-	return os, nil
+	return os, multierr
 }
