@@ -69,25 +69,27 @@ func (h *handler) OnChange(setID string, obj runtime.Object) error {
 	// Run the apply
 	defer h.locker.Lock(key)
 
+	logrus.Infof("running apply for %s...", setID)
 	if err := h.configureApply(setID, oss).Apply(oss.ObjectSet); err != nil {
 		return fmt.Errorf("failed to apply objectset for %s: %s", setID, err)
 	}
 
-	logrus.Infof("applied objectset %s", setID)
+	logrus.Infof("applied %s", setID)
 	return nil
 }
 
 // OnRemove cleans up the resources tracked by an objectSetState
-func (h *handler) OnRemove(setID string, obj *objectSetState) {
+func (h *handler) OnRemove(setID string) {
 	logrus.Infof("on delete: %s", setID)
 
-	if obj == nil {
-		return
-	}
+	key := relatedresource.FromString(setID)
 
-	if err := h.configureApply(setID, obj).ApplyObjects(); err != nil {
+	h.locker.Unlock(key)
+
+	logrus.Infof("running apply for %s...", setID)
+	if err := h.configureApply(setID, nil).ApplyObjects(); err != nil {
 		logrus.Errorf("failed to clean up objectset %s: %s", setID, err)
 	}
 
-	logrus.Infof("applied objectset %s", setID)
+	logrus.Infof("applied %s", setID)
 }

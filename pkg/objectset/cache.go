@@ -50,7 +50,7 @@ type ObjectSetLocker interface {
 // 2) a cache.SharedIndexInformer that listens to events on objectSetStates that are created from interacting with the provided register
 //
 // Note: This function is intentionally internal since the cache.SharedIndexInformer responds to an internal runtime.Object type (objectSetState)
-func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory, triggerOnDelete func(string, *objectSetState)) (LockableObjectSetRegister, cache.SharedIndexInformer) {
+func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory, triggerOnDelete func(string)) (LockableObjectSetRegister, cache.SharedIndexInformer) {
 	c := lockableObjectSetRegisterAndCache{
 		stateByKey:            make(map[relatedresource.Key]*objectSetState),
 		keyByResourceKeyByGVK: make(map[schema.GroupVersionKind]map[relatedresource.Key]relatedresource.Key),
@@ -99,7 +99,7 @@ type lockableObjectSetRegisterAndCache struct {
 	keyMapLock sync.RWMutex
 
 	// triggerOnDelete allows registering a function that gets called on a delete from the cache
-	triggerOnDelete func(key string, obj *objectSetState)
+	triggerOnDelete func(key string)
 }
 
 // init initializes the register and the cache
@@ -189,8 +189,8 @@ func (c *lockableObjectSetRegisterAndCache) Unlock(key relatedresource.Key) {
 // Delete allows you to delete an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Delete(key relatedresource.Key) {
 	logrus.Infof("deleting %s/%s", key.Namespace, key.Name)
-	s := c.deleteState(key)
-	c.triggerOnDelete(fmt.Sprintf("%s/%s", key.Namespace, key.Name), s)
+	c.deleteState(key)
+	c.triggerOnDelete(fmt.Sprintf("%s/%s", key.Namespace, key.Name))
 }
 
 // Enqueue allows you to enqueue an objectset associated with a specific key
@@ -273,11 +273,11 @@ func (c *lockableObjectSetRegisterAndCache) setState(key relatedresource.Key, os
 }
 
 // deleteState deletes anything on the register for a given key
-func (c *lockableObjectSetRegisterAndCache) deleteState(key relatedresource.Key) *objectSetState {
+func (c *lockableObjectSetRegisterAndCache) deleteState(key relatedresource.Key) {
 	s, exists := c.getState(key)
 	if !exists {
 		// nothing to add, event was already processed
-		return nil
+		return
 	}
 	c.stateMapLock.Lock()
 	delete(c.stateByKey, key)
@@ -286,7 +286,6 @@ func (c *lockableObjectSetRegisterAndCache) deleteState(key relatedresource.Key)
 	s.ObjectSet = nil
 	s.Locked = false
 	c.stateChanges <- watch.Event{Type: watch.Deleted, Object: s}
-	return s
 }
 
 // lock adds entries to the register to ensure that resources tracked by this ObjectSet are resolved to this ObjectSet
