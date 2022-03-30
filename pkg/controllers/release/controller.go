@@ -148,6 +148,7 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 		return helmRelease, fmt.Errorf("unable to parse objectset from manifest for HelmRelease %s: %s", helmRelease.GetName(), err)
 	}
 	logrus.Infof("detected HelmRelease %s is deployed, locking release %s with %d objects", helmRelease.GetName(), releaseKey, len(manifestOS.All()))
-	h.lockableObjectSetRegister.Lock(releaseKey, manifestOS)
+	locked := true
+	h.lockableObjectSetRegister.Set(releaseKey, manifestOS, &locked)
 	return helmRelease, nil
 }

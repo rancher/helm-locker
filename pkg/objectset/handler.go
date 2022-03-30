@@ -5,6 +5,7 @@ import (
 
 	"github.com/aiyengar2/helm-locker/pkg/gvk"
 	"github.com/rancher/wrangler/pkg/apply"
+	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +18,7 @@ var (
 type handler struct {
 	apply     apply.Apply
 	gvkLister gvk.GVKLister
+	locker    ObjectSetLocker
 }
 
 // configureApply configures the apply object for the provided setID and objectSetState
@@ -56,12 +58,17 @@ func (h *handler) OnChange(setID string, obj runtime.Object) error {
 	if oss.DeletionTimestamp != nil {
 		return nil
 	}
+
+	key := relatedresource.FromString(setID)
+	h.locker.Unlock(key) // ensure that apply does not trigger locking again
+
 	if !oss.Locked {
 		// nothing to do
 		return nil
 	}
-
 	// Run the apply
+	defer h.locker.Lock(key)
+
 	if err := h.configureApply(setID, oss).Apply(oss.ObjectSet); err != nil {
 		return fmt.Errorf("failed to apply objectset for %s: %s", setID, err)
 	}

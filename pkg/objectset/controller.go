@@ -24,7 +24,10 @@ func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller
 		gvkLister: gvk.NewGVKLister(discovery),
 	}
 
-	objectSetRegister, objectSetCache := newLockableObjectSetRegisterAndCache(scf, handler.OnRemove)
+	lockableObjectSetRegister, objectSetCache := newLockableObjectSetRegisterAndCache(scf, handler.OnRemove)
+
+	handler.locker = lockableObjectSetRegister
+
 	startCache := func(ctx context.Context) error {
 		go objectSetCache.Run(ctx.Done())
 		return nil
@@ -33,7 +36,7 @@ func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller
 	// Define a new controller that responds to events from the cache
 	objectSetController := controller.New(name, objectSetCache, startCache, &handler, applyDefaultOptions(opts))
 
-	return wrapStarter(objectSetController), objectSetRegister
+	return wrapStarter(objectSetController), lockableObjectSetRegister
 }
 
 // applyDefaultOptions applies default controller options if none are provided
