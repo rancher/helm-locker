@@ -41,7 +41,7 @@ RELEASE_NAME=test
 RELEASE_VERSION=v1
 
 # Magic one-liner! jq call is optional...
-kubectl get secrets -n ${RELEASE_NAMESPACE} sh.helm.release.v1.${RELEASE_NAME}.${RELEASE_VERSION}. -o=jsonpath='{ .data.release }' | base64 -d | base64 -d | gunzip -c | jq -r '.'
+kubectl get secrets -n ${RELEASE_NAMESPACE} sh.helm.release.v1.${RELEASE_NAME}.${RELEASE_VERSION} -o=jsonpath='{ .data.release }' | base64 -d | base64 -d | gunzip -c | jq -r '.'
 ```
 
 ## Building
