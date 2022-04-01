@@ -35,11 +35,7 @@ type appContext struct {
 
 	Apply             apply.Apply
 	ObjectSetRegister objectset.LockableObjectSetRegister
-
-	ClientConfig            clientcmd.ClientConfig
-	Discovery               *discovery.DiscoveryClient
-	SharedControllerFactory controller.SharedControllerFactory
-	starters                []start.Starter
+	starters          []start.Starter
 }
 
 func (a *appContext) start(ctx context.Context) error {
@@ -142,9 +138,6 @@ func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, e
 		Apply:             apply,
 		ObjectSetRegister: objectSetRegister,
 
-		ClientConfig:            cfg,
-		SharedControllerFactory: scf,
-		Discovery:               discovery,
 		starters: []start.Starter{
 			objectSet,
 			core,
