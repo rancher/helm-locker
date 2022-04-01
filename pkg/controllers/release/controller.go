@@ -89,13 +89,25 @@ func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj run
 }
 
 func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
-	releaseKey := releaseKeyFromRelease(helmRelease)
-	h.lockableObjectSetRegister.Delete(releaseKey)
+	if helmRelease == nil {
+		return nil, nil
+	}
+	if helmRelease.Namespace != h.systemNamespace {
+		// do nothing if it's not in the namespace this controller was registered with
+		return nil, nil
+	}
+	// HelmRelease CRs are only pointers to Helm releases... if the HelmRelease CR is removed, we should do nothing.
+	logrus.Infof("HelmRelease %s/%s was removed, resources tied to Helm release will need to be manually deleted.", helmRelease.Namespace, helmRelease.Name)
+	logrus.Infof("To delete the contents of a Helm release automatically, delete the Helm release secret before deleting the HelmRelease.")
 	return nil, nil
 }
 
 func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
 	if helmRelease == nil || helmRelease.DeletionTimestamp != nil {
+		return nil, nil
+	}
+	if helmRelease.Namespace != h.systemNamespace {
+		// do nothing if it's not in the namespace this controller was registered with
 		return nil, nil
 	}
 	releaseKey := releaseKeyFromRelease(helmRelease)

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/aiyengar2/helm-locker/pkg/controllers/release"
@@ -46,12 +47,12 @@ func (a *appContext) start(ctx context.Context) error {
 }
 
 func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientConfig) error {
-	appCtx, err := newContext(ctx, cfg)
-	if err != nil {
-		return err
+	if len(systemNamespace) == 0 {
+		return errors.New("cannot start controllers on system namespace: system namespace not provided")
 	}
 
-	if err := addData(systemNamespace, appCtx); err != nil {
+	appCtx, err := newContext(ctx, cfg)
+	if err != nil {
 		return err
 	}
 
