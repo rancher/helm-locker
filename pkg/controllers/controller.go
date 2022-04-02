@@ -13,9 +13,9 @@ import (
 	"github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/apply"
-	"github.com/rancher/wrangler/pkg/generated/controllers/apps"
 	"github.com/rancher/wrangler/pkg/generated/controllers/core"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/ratelimit"
 	"github.com/rancher/wrangler/pkg/start"
@@ -109,7 +109,7 @@ func newContext(ctx context.Context, systemNamespace string, cfg clientcmd.Clien
 		return nil, err
 	}
 
-	core, err := core.NewFactoryFromConfigWithOptions(client, &core.FactoryOptions{
+	core, err := core.NewFactoryFromConfigWithOptions(client, &generic.FactoryOptions{
 		SharedControllerFactory: scf,
 	})
 	if err != nil {
@@ -117,7 +117,7 @@ func newContext(ctx context.Context, systemNamespace string, cfg clientcmd.Clien
 	}
 	corev := core.Core().V1()
 
-	helm, err := v1alpha1.NewFactoryFromConfigWithOptions(client, &apps.FactoryOptions{
+	helm, err := v1alpha1.NewFactoryFromConfigWithOptions(client, &generic.FactoryOptions{
 		Namespace:               systemNamespace,
 		SharedControllerFactory: scf,
 	})
