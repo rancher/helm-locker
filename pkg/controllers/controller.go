@@ -47,7 +47,7 @@ func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientC
 		return errors.New("cannot start controllers on system namespace: system namespace not provided")
 	}
 
-	appCtx, err := newContext(ctx, cfg)
+	appCtx, err := newContext(ctx, systemNamespace, cfg)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func controllerFactory(rest *rest.Config) (controller.SharedControllerFactory, e
 	}), nil
 }
 
-func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, error) {
+func newContext(ctx context.Context, systemNamespace string, cfg clientcmd.ClientConfig) (*appContext, error) {
 	client, err := cfg.ClientConfig()
 	if err != nil {
 		return nil, err
@@ -118,6 +118,7 @@ func newContext(ctx context.Context, cfg clientcmd.ClientConfig) (*appContext, e
 	corev := core.Core().V1()
 
 	helm, err := v1alpha1.NewFactoryFromConfigWithOptions(client, &apps.FactoryOptions{
+		Namespace:               systemNamespace,
 		SharedControllerFactory: scf,
 	})
 	if err != nil {

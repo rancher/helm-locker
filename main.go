@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -26,6 +27,10 @@ type HelmLocker struct {
 }
 
 func (a *HelmLocker) Run(cmd *cobra.Command, args []string) error {
+	if len(a.Namespace) == 0 {
+		return fmt.Errorf("helm-locker can only be started in a single namespace")
+	}
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
