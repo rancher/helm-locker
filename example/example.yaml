@@ -1,5 +1,5 @@
-kind: HelmRelease
 apiVersion: helm.cattle.io/v1alpha1
+kind: HelmRelease
 metadata:
   name: my-release
   namespace: cattle-helm-system
