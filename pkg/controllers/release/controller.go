@@ -99,6 +99,8 @@ func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRele
 	// HelmRelease CRs are only pointers to Helm releases... if the HelmRelease CR is removed, we should do nothing.
 	logrus.Infof("HelmRelease %s/%s was removed, resources tied to Helm release will need to be manually deleted.", helmRelease.Namespace, helmRelease.Name)
 	logrus.Infof("To delete the contents of a Helm release automatically, delete the Helm release secret before deleting the HelmRelease.")
+	releaseKey := releaseKeyFromRelease(helmRelease)
+	h.lockableObjectSetRegister.Delete(releaseKey, false) // remove the objectset, but don't purge the underlying resources
 	return nil, nil
 }
 
@@ -117,7 +119,7 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 	}
 	if len(helmReleaseSecrets) == 0 {
 		logrus.Errorf("could not find any Helm Release Secrets tied to HelmRelease %s", helmRelease.GetName())
-		h.lockableObjectSetRegister.Delete(releaseKey)
+		h.lockableObjectSetRegister.Delete(releaseKey, true) // remove the objectset and purge any untracked resources
 		helmRelease.Status.ReleaseStatus = "SecretNotFound"
 		return h.helmReleases.UpdateStatus(helmRelease)
 	}

@@ -33,7 +33,7 @@ type ObjectSetRegister interface {
 	Set(key relatedresource.Key, os *objectset.ObjectSet, locked *bool)
 
 	// Delete allows you to delete an objectset associated with a specific key
-	Delete(key relatedresource.Key)
+	Delete(key relatedresource.Key, purge bool)
 }
 
 // ObjectSetLocker can lock or unlock object sets tied to a specific key
@@ -50,7 +50,7 @@ type ObjectSetLocker interface {
 // 2) a cache.SharedIndexInformer that listens to events on objectSetStates that are created from interacting with the provided register
 //
 // Note: This function is intentionally internal since the cache.SharedIndexInformer responds to an internal runtime.Object type (objectSetState)
-func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory, triggerOnDelete func(string)) (LockableObjectSetRegister, cache.SharedIndexInformer) {
+func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory, triggerOnDelete func(string, bool)) (LockableObjectSetRegister, cache.SharedIndexInformer) {
 	c := lockableObjectSetRegisterAndCache{
 		stateByKey:            make(map[relatedresource.Key]*objectSetState),
 		keyByResourceKeyByGVK: make(map[schema.GroupVersionKind]map[relatedresource.Key]relatedresource.Key),
@@ -99,7 +99,9 @@ type lockableObjectSetRegisterAndCache struct {
 	keyMapLock sync.RWMutex
 
 	// triggerOnDelete allows registering a function that gets called on a delete from the cache
-	triggerOnDelete func(key string)
+	// purge indicates whether or not the triggerOnDelete function is expected to purge underlying
+	// resources on deleting an objectSet
+	triggerOnDelete func(key string, purge bool)
 }
 
 // init initializes the register and the cache
@@ -187,10 +189,11 @@ func (c *lockableObjectSetRegisterAndCache) Unlock(key relatedresource.Key) {
 }
 
 // Delete allows you to delete an objectset associated with a specific key
-func (c *lockableObjectSetRegisterAndCache) Delete(key relatedresource.Key) {
+func (c *lockableObjectSetRegisterAndCache) Delete(key relatedresource.Key, purge bool) {
 	logrus.Infof("deleting %s/%s", key.Namespace, key.Name)
 	c.deleteState(key)
-	c.triggerOnDelete(fmt.Sprintf("%s/%s", key.Namespace, key.Name))
+
+	c.triggerOnDelete(fmt.Sprintf("%s/%s", key.Namespace, key.Name), purge)
 }
 
 // Enqueue allows you to enqueue an objectset associated with a specific key

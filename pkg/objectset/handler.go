@@ -79,12 +79,16 @@ func (h *handler) OnChange(setID string, obj runtime.Object) error {
 }
 
 // OnRemove cleans up the resources tracked by an objectSetState
-func (h *handler) OnRemove(setID string) {
+func (h *handler) OnRemove(setID string, purge bool) {
 	logrus.Infof("on delete: %s", setID)
 
 	key := relatedresource.FromString(setID)
 
 	h.locker.Unlock(key)
+
+	if !purge {
+		return
+	}
 
 	logrus.Infof("running apply for %s...", setID)
 	if err := h.configureApply(setID, nil).ApplyObjects(); err != nil {
