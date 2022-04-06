@@ -19,6 +19,8 @@ import (
 const (
 	HelmReleaseByReleaseKey = "v1alpha1.cattle.io/helm-release-by-release-key"
 	HelmSecretByReleaseKey  = "v1alpha1.cattle.io/helm-secret-by-release-key"
+
+	SecretNotFound = "SecretNotFound"
 )
 
 type handler struct {
@@ -96,9 +98,14 @@ func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRele
 		// do nothing if it's not in the namespace this controller was registered with
 		return nil, nil
 	}
-	// HelmRelease CRs are only pointers to Helm releases... if the HelmRelease CR is removed, we should do nothing.
-	logrus.Infof("HelmRelease %s/%s was removed, resources tied to Helm release will need to be manually deleted.", helmRelease.Namespace, helmRelease.Name)
-	logrus.Infof("To delete the contents of a Helm release automatically, delete the Helm release secret before deleting the HelmRelease.")
+	if helmRelease.Status.ReleaseStatus == SecretNotFound {
+		// HelmRelease was not tracking any underlying objectSet
+		return nil, nil
+	}
+	// HelmRelease CRs are only pointers to Helm releases... if the HelmRelease CR is removed, we should do nothing, but should warn the user
+	// that we are leaving behind resources in the cluster
+	logrus.Warnf("HelmRelease %s/%s was removed, resources tied to Helm release will need to be manually deleted.", helmRelease.Namespace, helmRelease.Name)
+	logrus.Warnf("To delete the contents of a Helm release automatically, delete the Helm release secret before deleting the HelmRelease.")
 	releaseKey := releaseKeyFromRelease(helmRelease)
 	h.lockableObjectSetRegister.Delete(releaseKey, false) // remove the objectset, but don't purge the underlying resources
 	return nil, nil
@@ -118,9 +125,9 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 		return helmRelease, fmt.Errorf("unable to find Helm Release Secret tied to Helm Release %s: %s", helmRelease.GetName(), err)
 	}
 	if len(helmReleaseSecrets) == 0 {
-		logrus.Errorf("could not find any Helm Release Secrets tied to HelmRelease %s", helmRelease.GetName())
+		logrus.Warnf("could not find any Helm Release Secrets tied to HelmRelease %s", helmRelease.GetName())
 		h.lockableObjectSetRegister.Delete(releaseKey, true) // remove the objectset and purge any untracked resources
-		helmRelease.Status.ReleaseStatus = "SecretNotFound"
+		helmRelease.Status.ReleaseStatus = SecretNotFound
 		return h.helmReleases.UpdateStatus(helmRelease)
 	}
 	var helmReleaseSecret *v1.Secret
