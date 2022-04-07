@@ -104,7 +104,7 @@ func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRele
 	}
 	// HelmRelease CRs are only pointers to Helm releases... if the HelmRelease CR is removed, we should do nothing, but should warn the user
 	// that we are leaving behind resources in the cluster
-	logrus.Warnf("HelmRelease %s/%s was removed, resources tied to Helm release will need to be manually deleted.", helmRelease.Namespace, helmRelease.Name)
+	logrus.Warnf("HelmRelease %s/%s was removed, resources tied to Helm release may need to be manually deleted.", helmRelease.Namespace, helmRelease.Name)
 	logrus.Warnf("To delete the contents of a Helm release automatically, delete the Helm release secret before deleting the HelmRelease.")
 	releaseKey := releaseKeyFromRelease(helmRelease)
 	h.lockableObjectSetRegister.Delete(releaseKey, false) // remove the objectset, but don't purge the underlying resources
@@ -125,7 +125,7 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 		return helmRelease, fmt.Errorf("unable to find Helm Release Secret tied to Helm Release %s: %s", helmRelease.GetName(), err)
 	}
 	if len(helmReleaseSecrets) == 0 {
-		logrus.Warnf("could not find any Helm Release Secrets tied to HelmRelease %s", helmRelease.GetName())
+		logrus.Warnf("waiting for release %s/%s to be found to reconcile HelmRelease %s, deleting any orphaned resources", releaseKey.Namespace, releaseKey.Name, helmRelease.GetName())
 		h.lockableObjectSetRegister.Delete(releaseKey, true) // remove the objectset and purge any untracked resources
 		helmRelease.Status.ReleaseStatus = SecretNotFound
 		return h.helmReleases.UpdateStatus(helmRelease)
@@ -159,7 +159,7 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 	}
 	if !releaseInfo.Locked() {
 		// TODO: add status
-		logrus.Infof("detected HelmRelease %s is not deployed (status is %s), unlocking release", helmRelease.GetName(), releaseInfo.Status)
+		logrus.Infof("detected HelmRelease %s is not deployed or transitioning (status is %s), unlocking release", helmRelease.GetName(), releaseInfo.Status)
 		h.lockableObjectSetRegister.Unlock(releaseKey)
 		return helmRelease, nil
 	}

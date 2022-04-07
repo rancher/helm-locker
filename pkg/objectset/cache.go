@@ -163,13 +163,13 @@ func (c *lockableObjectSetRegisterAndCache) Watch(options metav1.ListOptions) (w
 
 // Set allows you to set and lock an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Set(key relatedresource.Key, os *objectset.ObjectSet, locked *bool) {
-	logrus.Infof("set objectset for %s/%s", key.Namespace, key.Name)
+	logrus.Debugf("set objectset for %s/%s", key.Namespace, key.Name)
 	c.setState(key, os, locked, false)
 }
 
 // Lock allows you to lock an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Lock(key relatedresource.Key) {
-	logrus.Infof("locking %s/%s", key.Namespace, key.Name)
+	logrus.Debugf("locking %s/%s", key.Namespace, key.Name)
 	s, ok := c.getState(key)
 	if !ok {
 		// nothing to lock
@@ -184,15 +184,14 @@ func (c *lockableObjectSetRegisterAndCache) Lock(key relatedresource.Key) {
 
 // Unlock allows you to unlock an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Unlock(key relatedresource.Key) {
-	logrus.Infof("unlocking %s/%s", key.Namespace, key.Name)
+	logrus.Debugf("unlocking %s/%s", key.Namespace, key.Name)
 	c.unlock(key)
 }
 
 // Delete allows you to delete an objectset associated with a specific key
 func (c *lockableObjectSetRegisterAndCache) Delete(key relatedresource.Key, purge bool) {
-	logrus.Infof("deleting %s/%s", key.Namespace, key.Name)
+	logrus.Debugf("deleting %s/%s", key.Namespace, key.Name)
 	c.deleteState(key)
-
 	c.triggerOnDelete(fmt.Sprintf("%s/%s", key.Namespace, key.Name), purge)
 }
 
