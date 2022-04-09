@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	HelmReleaseByReleaseKey = "v1alpha1.cattle.io/helm-release-by-release-key"
-	HelmSecretByReleaseKey  = "v1alpha1.cattle.io/helm-secret-by-release-key"
+	HelmReleaseByReleaseKey = "helm.cattle.io/helm-release-by-release-key"
+	HelmSecretByReleaseKey  = "helm.cattle.io/helm-secret-by-release-key"
 
 	SecretNotFound = "SecretNotFound"
 )
