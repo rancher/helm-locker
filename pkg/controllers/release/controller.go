@@ -3,24 +3,23 @@ package release
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
 	helmcontrollers "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
 	"github.com/aiyengar2/helm-locker/pkg/objectset"
 	"github.com/aiyengar2/helm-locker/pkg/objectset/parser"
+	"github.com/aiyengar2/helm-locker/pkg/releases"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
+	"helm.sh/helm/v3/pkg/storage/driver"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 )
 
 const (
 	HelmReleaseByReleaseKey = "helm.cattle.io/helm-release-by-release-key"
-	HelmSecretByReleaseKey  = "helm.cattle.io/helm-secret-by-release-key"
-
-	SecretNotFound = "SecretNotFound"
 )
 
 type handler struct {
@@ -30,6 +29,8 @@ type handler struct {
 	helmReleaseCache helmcontrollers.HelmReleaseCache
 	secrets          corecontrollers.SecretController
 	secretCache      corecontrollers.SecretCache
+
+	releases releases.HelmReleaseGetter
 
 	lockableObjectSetRegister objectset.LockableObjectSetRegister
 }
@@ -41,6 +42,7 @@ func Register(
 	helmReleaseCache helmcontrollers.HelmReleaseCache,
 	secrets corecontrollers.SecretController,
 	secretCache corecontrollers.SecretCache,
+	k8s kubernetes.Interface,
 	lockableObjectSetRegister objectset.LockableObjectSetRegister,
 ) {
 
@@ -52,16 +54,22 @@ func Register(
 		secrets:          secrets,
 		secretCache:      secretCache,
 
+		releases: releases.NewHelmReleaseGetter(k8s),
+
 		lockableObjectSetRegister: lockableObjectSetRegister,
 	}
 
-	secretCache.AddIndexer(HelmSecretByReleaseKey, secretsToReleaseKey)
 	helmReleaseCache.AddIndexer(HelmReleaseByReleaseKey, helmReleaseToReleaseKey)
 
 	relatedresource.Watch(ctx, "on-helm-secret-change", h.resolveHelmRelease, helmReleases, secrets)
 
 	helmReleases.OnChange(ctx, "apply-lock-on-release", h.OnHelmRelease)
 	helmReleases.OnRemove(ctx, "on-remove", h.OnHelmReleaseRemove)
+}
+
+func helmReleaseToReleaseKey(helmRelease *v1alpha1.HelmRelease) ([]string, error) {
+	releaseKey := releaseKeyFromRelease(helmRelease)
+	return []string{releaseKeyToString(releaseKey)}, nil
 }
 
 func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj runtime.Object) ([]relatedresource.Key, error) {
@@ -98,13 +106,13 @@ func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRele
 		// do nothing if it's not in the namespace this controller was registered with
 		return nil, nil
 	}
-	if helmRelease.Status.ReleaseStatus == SecretNotFound {
+	if helmRelease.Status.State == v1alpha1.SecretNotFoundState || helmRelease.Status.State == v1alpha1.UninstalledState {
 		// HelmRelease was not tracking any underlying objectSet
 		return nil, nil
 	}
 	// HelmRelease CRs are only pointers to Helm releases... if the HelmRelease CR is removed, we should do nothing, but should warn the user
 	// that we are leaving behind resources in the cluster
-	logrus.Warnf("HelmRelease %s/%s was removed, resources tied to Helm release may need to be manually deleted.", helmRelease.Namespace, helmRelease.Name)
+	logrus.Warnf("HelmRelease %s/%s was removed, resources tied to Helm release may need to be manually deleted", helmRelease.Namespace, helmRelease.Name)
 	logrus.Warnf("To delete the contents of a Helm release automatically, delete the Helm release secret before deleting the HelmRelease.")
 	releaseKey := releaseKeyFromRelease(helmRelease)
 	h.lockableObjectSetRegister.Delete(releaseKey, false) // remove the objectset, but don't purge the underlying resources
@@ -120,46 +128,28 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 		return nil, nil
 	}
 	releaseKey := releaseKeyFromRelease(helmRelease)
-	helmReleaseSecrets, err := h.secretCache.GetByIndex(HelmSecretByReleaseKey, releaseKeyToString(releaseKey))
+	latestRelease, err := h.releases.Last(releaseKey.Namespace, releaseKey.Name)
 	if err != nil {
-		return helmRelease, fmt.Errorf("unable to find Helm Release Secret tied to Helm Release %s: %s", helmRelease.GetName(), err)
-	}
-	if len(helmReleaseSecrets) == 0 {
-		logrus.Warnf("waiting for release %s/%s to be found to reconcile HelmRelease %s, deleting any orphaned resources", releaseKey.Namespace, releaseKey.Name, helmRelease.GetName())
-		h.lockableObjectSetRegister.Delete(releaseKey, true) // remove the objectset and purge any untracked resources
-		helmRelease.Status.ReleaseStatus = SecretNotFound
-		return h.helmReleases.UpdateStatus(helmRelease)
-	}
-	var helmReleaseSecret *v1.Secret
-	var latestVersion, currVersion int
-	for _, secret := range helmReleaseSecrets {
-		version, ok := secret.Labels["version"]
-		if !ok {
-			// ignore if the version is not set, which is unexpected
-			logrus.Debugf("could not identify release version tied to Helm release secret %s/%s: version label does not exist", secret.GetNamespace(), secret.GetName())
-			continue
+		if err == driver.ErrReleaseNotFound {
+			logrus.Warnf("waiting for release %s/%s to be found to reconcile HelmRelease %s, deleting any orphaned resources", releaseKey.Namespace, releaseKey.Name, helmRelease.GetName())
+			h.lockableObjectSetRegister.Delete(releaseKey, true) // remove the objectset and purge any untracked resources
+			helmRelease.Status.Version = 0
+			helmRelease.Status.Description = "Could not find Helm Release Secret"
+			helmRelease.Status.State = v1alpha1.SecretNotFoundState
+			helmRelease.Status.Notes = ""
+			return h.helmReleases.UpdateStatus(helmRelease)
 		}
-		currVersion, err = strconv.Atoi(version)
-		if err != nil {
-			logrus.Debugf("could not identify release version tied to Helm release secret %s/%s: %s", secret.GetNamespace(), secret.GetName(), err)
-		}
-		if currVersion > latestVersion {
-			latestVersion = currVersion
-			helmReleaseSecret = secret
-		}
+		return helmRelease, fmt.Errorf("unable to find latest Helm Release Secret tied to Helm Release %s: %s", helmRelease.GetName(), err)
 	}
-	logrus.Infof("loading latest release version %d of HelmRelease %s", currVersion, helmRelease.GetName())
-	releaseInfo, err := NewReleaseInfo(helmReleaseSecret)
-	if err != nil {
-		return helmRelease, err
-	}
-	helmRelease, err = h.helmReleases.UpdateStatus(releaseInfo.SetStatus(helmRelease))
+	logrus.Infof("loading latest release version %d of HelmRelease %s", latestRelease.Version, helmRelease.GetName())
+	releaseInfo := NewReleaseInfo(latestRelease)
+	helmRelease, err = h.helmReleases.UpdateStatus(releaseInfo.GetUpdatedStatus(helmRelease))
 	if err != nil {
 		return helmRelease, fmt.Errorf("unable to update status of HelmRelease %s: %s", helmRelease.GetName(), err)
 	}
 	if !releaseInfo.Locked() {
 		// TODO: add status
-		logrus.Infof("detected HelmRelease %s is not deployed or transitioning (status is %s), unlocking release", helmRelease.GetName(), releaseInfo.Status)
+		logrus.Infof("detected HelmRelease %s is not deployed or transitioning (state is %s), unlocking release", helmRelease.GetName(), releaseInfo.State)
 		h.lockableObjectSetRegister.Unlock(releaseKey)
 		return helmRelease, nil
 	}

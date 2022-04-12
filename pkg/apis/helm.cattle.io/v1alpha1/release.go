@@ -5,6 +5,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// Helm Release Statuses
+
+	SecretNotFoundState = "SecretNotFound"
+	UnknownState        = "Unknown"
+	DeployedState       = "Deployed"
+	UninstalledState    = "Uninstalled"
+	ErrorState          = "Error"
+	FailedState         = "Failed"
+	TransitioningState  = "Transitioning"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -25,10 +37,10 @@ type ReleaseKey struct {
 }
 
 type HelmReleaseStatus struct {
-	Version       int    `json:"version,omitempty"`
-	Description   string `json:"description,omitempty"`
-	ReleaseStatus string `json:"releaseStatus,omitempty"`
-	Notes         string `json:"notes,omitempty"`
+	State       string `json:"state,omitempty"`
+	Version     int    `json:"version,omitempty"`
+	Description string `json:"description,omitempty"`
+	Notes       string `json:"notes,omitempty"`
 
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 }

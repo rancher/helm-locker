@@ -59,6 +59,7 @@ func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientC
 		appCtx.HelmRelease().Cache(),
 		appCtx.Core.Secret(),
 		appCtx.Core.Secret().Cache(),
+		appCtx.K8s,
 		appCtx.ObjectSetRegister,
 	)
 

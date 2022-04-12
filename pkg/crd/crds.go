@@ -14,7 +14,10 @@ func List() []crd.CRD {
 	return []crd.CRD{
 		newCRD(&v1alpha1.HelmRelease{}, func(c crd.CRD) crd.CRD {
 			return c.
-				WithColumn("Release Status", ".status.releaseStatus")
+				WithColumn("Release Name", ".spec.release.name").
+				WithColumn("Release Namespace", ".spec.release.namespace").
+				WithColumn("Version", ".status.version").
+				WithColumn("State", ".status.state")
 		}),
 	}
 }
