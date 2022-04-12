@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aiyengar2/helm-locker/pkg/gvk"
+	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
@@ -19,6 +20,9 @@ type handler struct {
 	apply     apply.Apply
 	gvkLister gvk.GVKLister
 	locker    ObjectSetLocker
+
+	// allows us to add hooks into triggering certain actions on reconciles, e.g. launching events
+	sharedHandler *controller.SharedHandler
 }
 
 // configureApply configures the apply object for the provided setID and objectSetState
@@ -75,6 +79,9 @@ func (h *handler) OnChange(setID string, obj runtime.Object) error {
 	}
 
 	logrus.Infof("applied %s", setID)
+
+	go h.sharedHandler.OnChange(setID, obj)
+
 	return nil
 }
 
@@ -96,4 +103,6 @@ func (h *handler) OnRemove(setID string, purge bool) {
 	}
 
 	logrus.Infof("applied %s", setID)
+
+	go h.sharedHandler.OnChange(setID, nil)
 }

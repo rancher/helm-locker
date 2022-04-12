@@ -18,12 +18,16 @@ import (
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/ratelimit"
+	"github.com/rancher/wrangler/pkg/schemes"
 	"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
+	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -33,16 +37,21 @@ type appContext struct {
 	K8s  kubernetes.Interface
 	Core corecontrollers.Interface
 
-	Apply             apply.Apply
+	Apply apply.Apply
+
 	ObjectSetRegister objectset.LockableObjectSetRegister
-	starters          []start.Starter
+	ObjectSetHandler  *controller.SharedHandler
+
+	EventBroadcaster record.EventBroadcaster
+
+	starters []start.Starter
 }
 
 func (a *appContext) start(ctx context.Context) error {
 	return start.All(ctx, 50, a.starters...)
 }
 
-func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientConfig) error {
+func Register(ctx context.Context, systemNamespace, nodeName string, cfg clientcmd.ClientConfig) error {
 	if len(systemNamespace) == 0 {
 		return errors.New("cannot start controllers on system namespace: system namespace not provided")
 	}
@@ -51,6 +60,15 @@ func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientC
 	if err != nil {
 		return err
 	}
+
+	appCtx.EventBroadcaster.StartLogging(logrus.Infof)
+	appCtx.EventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{
+		Interface: appCtx.K8s.CoreV1().Events(systemNamespace),
+	})
+	recorder := appCtx.EventBroadcaster.NewRecorder(schemes.All, corev1.EventSource{
+		Component: "helm-locker",
+		Host:      nodeName,
+	})
 
 	// TODO: Register all controllers
 	release.Register(ctx,
@@ -61,6 +79,8 @@ func Register(ctx context.Context, systemNamespace string, cfg clientcmd.ClientC
 		appCtx.Core.Secret().Cache(),
 		appCtx.K8s,
 		appCtx.ObjectSetRegister,
+		appCtx.ObjectSetHandler,
+		recorder,
 	)
 
 	leader.RunOrDie(ctx, systemNamespace, "helm-locker-lock", appCtx.K8s, func(ctx context.Context) {
@@ -128,7 +148,7 @@ func newContext(ctx context.Context, systemNamespace string, cfg clientcmd.Clien
 
 	apply := apply.New(discovery, apply.NewClientFactory(client))
 
-	objectSet, objectSetRegister := objectset.NewLockableObjectSetRegister("object-set-register", apply, scf, discovery, nil)
+	objectSet, objectSetRegister, objectSetHandler := objectset.NewLockableObjectSetRegister("object-set-register", apply, scf, discovery, nil)
 
 	return &appContext{
 		Interface: helmv,
@@ -136,8 +156,12 @@ func newContext(ctx context.Context, systemNamespace string, cfg clientcmd.Clien
 		K8s:  k8s,
 		Core: corev,
 
-		Apply:             apply,
+		Apply: apply,
+
 		ObjectSetRegister: objectSetRegister,
+		ObjectSetHandler:  objectSetHandler,
+
+		EventBroadcaster: record.NewBroadcaster(),
 
 		starters: []start.Starter{
 			objectSet,

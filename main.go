@@ -24,6 +24,7 @@ var (
 type HelmLocker struct {
 	Kubeconfig string `usage:"Kubeconfig file" env:"KUBECONFIG"`
 	Namespace  string `usage:"Namespace to watch for HelmReleases" default:"cattle-helm-system" env:"NAMESPACE"`
+	NodeName   string `usage:"Name of the node this controller is running on" env:"NODE_NAME"`
 }
 
 func (a *HelmLocker) Run(cmd *cobra.Command, args []string) error {
@@ -48,7 +49,7 @@ func (a *HelmLocker) Run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := controllers.Register(ctx, a.Namespace, cfg); err != nil {
+	if err := controllers.Register(ctx, a.Namespace, a.NodeName, cfg); err != nil {
 		return err
 	}
 

@@ -9,13 +9,16 @@ import (
 	"github.com/aiyengar2/helm-locker/pkg/objectset"
 	"github.com/aiyengar2/helm-locker/pkg/objectset/parser"
 	"github.com/aiyengar2/helm-locker/pkg/releases"
+	"github.com/rancher/lasso/pkg/controller"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
 	"helm.sh/helm/v3/pkg/storage/driver"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -33,6 +36,7 @@ type handler struct {
 	releases releases.HelmReleaseGetter
 
 	lockableObjectSetRegister objectset.LockableObjectSetRegister
+	recorder                  record.EventRecorder
 }
 
 func Register(
@@ -44,6 +48,8 @@ func Register(
 	secretCache corecontrollers.SecretCache,
 	k8s kubernetes.Interface,
 	lockableObjectSetRegister objectset.LockableObjectSetRegister,
+	lockableObjectSetHandler *controller.SharedHandler,
+	recorder record.EventRecorder,
 ) {
 
 	h := &handler{
@@ -57,7 +63,10 @@ func Register(
 		releases: releases.NewHelmReleaseGetter(k8s),
 
 		lockableObjectSetRegister: lockableObjectSetRegister,
+		recorder:                  recorder,
 	}
+
+	lockableObjectSetHandler.Register(ctx, "on-objectset-change", controller.SharedControllerHandlerFunc(h.OnObjectSetChange))
 
 	helmReleaseCache.AddIndexer(HelmReleaseByReleaseKey, helmReleaseToReleaseKey)
 
@@ -65,6 +74,24 @@ func Register(
 
 	helmReleases.OnChange(ctx, "apply-lock-on-release", h.OnHelmRelease)
 	helmReleases.OnRemove(ctx, "on-remove", h.OnHelmReleaseRemove)
+}
+
+func (h *handler) OnObjectSetChange(setID string, obj runtime.Object) (runtime.Object, error) {
+	helmReleases, err := h.helmReleaseCache.GetByIndex(HelmReleaseByReleaseKey, setID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find HelmReleases for objectset %s to trigger event", setID)
+	}
+	for _, helmRelease := range helmReleases {
+		if helmRelease == nil {
+			continue
+		}
+		if obj != nil {
+			h.recorder.Eventf(helmRelease, corev1.EventTypeNormal, "Locked", "Applied ObjectSet %s tied to HelmRelease %s/%s to lock into place", setID, helmRelease.Namespace, helmRelease.Name)
+		} else {
+			h.recorder.Eventf(helmRelease, corev1.EventTypeNormal, "Untracked", "ObjectSet %s tied to HelmRelease %s/%s is not tracked", setID, helmRelease.Namespace, helmRelease.Name)
+		}
+	}
+	return nil, nil
 }
 
 func helmReleaseToReleaseKey(helmRelease *v1alpha1.HelmRelease) ([]string, error) {
@@ -151,6 +178,7 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 		// TODO: add status
 		logrus.Infof("detected HelmRelease %s is not deployed or transitioning (state is %s), unlocking release", helmRelease.GetName(), releaseInfo.State)
 		h.lockableObjectSetRegister.Unlock(releaseKey)
+		h.recorder.Eventf(helmRelease, corev1.EventTypeNormal, "Transitioning", "Unlocked HelmRelease %s/%s to allow changes while Helm operation is being executed", helmRelease.Namespace, helmRelease.Name)
 		return helmRelease, nil
 	}
 	manifestOS, err := parser.Parse(releaseInfo.Manifest)

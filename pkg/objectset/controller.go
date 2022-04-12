@@ -15,13 +15,14 @@ import (
 
 // NewLockableObjectSetRegister returns a starter that starts an ObjectSetController listening to events on ObjectSetStates
 // and a LockableObjectSetRegister that allows you to register new states for ObjectSets in memory
-func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller.SharedControllerFactory, discovery discovery.DiscoveryInterface, opts *controller.Options) (start.Starter, LockableObjectSetRegister) {
+func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller.SharedControllerFactory, discovery discovery.DiscoveryInterface, opts *controller.Options) (start.Starter, LockableObjectSetRegister, *controller.SharedHandler) {
 	// Define a new cache
 	apply = apply.WithCacheTypeFactory(informerfactory.New(scf))
 
 	handler := handler{
-		apply:     apply,
-		gvkLister: gvk.NewGVKLister(discovery),
+		apply:         apply,
+		gvkLister:     gvk.NewGVKLister(discovery),
+		sharedHandler: &controller.SharedHandler{},
 	}
 
 	lockableObjectSetRegister, objectSetCache := newLockableObjectSetRegisterAndCache(scf, handler.OnRemove)
@@ -36,7 +37,7 @@ func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller
 	// Define a new controller that responds to events from the cache
 	objectSetController := controller.New(name, objectSetCache, startCache, &handler, applyDefaultOptions(opts))
 
-	return wrapStarter(objectSetController), lockableObjectSetRegister
+	return wrapStarter(objectSetController), lockableObjectSetRegister, handler.sharedHandler
 }
 
 // applyDefaultOptions applies default controller options if none are provided
