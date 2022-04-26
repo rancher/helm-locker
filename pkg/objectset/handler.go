@@ -8,12 +8,7 @@ import (
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-)
-
-var (
-	SecretGVK = v1.SchemeGroupVersion.WithKind("Secret")
 )
 
 type handler struct {

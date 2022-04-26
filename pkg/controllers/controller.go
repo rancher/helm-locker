@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/aiyengar2/helm-locker/pkg/controllers/release"
-	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io"
-	helmcontrollers "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
+	"github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io"
+	helmcontroller "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
 	"github.com/aiyengar2/helm-locker/pkg/objectset"
 	"github.com/rancher/lasso/pkg/cache"
 	"github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/generated/controllers/core"
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	corecontroller "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/ratelimit"
@@ -32,10 +32,10 @@ import (
 )
 
 type appContext struct {
-	helmcontrollers.Interface
+	helmcontroller.Interface
 
 	K8s  kubernetes.Interface
-	Core corecontrollers.Interface
+	Core corecontroller.Interface
 
 	Apply apply.Apply
 
@@ -137,7 +137,7 @@ func newContext(ctx context.Context, systemNamespace string, cfg clientcmd.Clien
 	}
 	corev := core.Core().V1()
 
-	helm, err := v1alpha1.NewFactoryFromConfigWithOptions(client, &generic.FactoryOptions{
+	helm, err := helm.NewFactoryFromConfigWithOptions(client, &generic.FactoryOptions{
 		Namespace:               systemNamespace,
 		SharedControllerFactory: scf,
 	})

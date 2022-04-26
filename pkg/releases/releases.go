@@ -4,14 +4,14 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
-	"helm.sh/helm/v3/pkg/release"
+	rspb "helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	"k8s.io/client-go/kubernetes"
 )
 
 type HelmReleaseGetter interface {
-	Last(namespace, name string) (*release.Release, error)
+	Last(namespace, name string) (*rspb.Release, error)
 }
 
 func NewHelmReleaseGetter(k8s kubernetes.Interface) HelmReleaseGetter {
@@ -41,7 +41,7 @@ func (g *latestReleaseGetter) getStore(namespace string) *storage.Storage {
 	return store
 }
 
-func (g *latestReleaseGetter) Last(namespace, name string) (*release.Release, error) {
+func (g *latestReleaseGetter) Last(namespace, name string) (*rspb.Release, error) {
 	store := g.getStore(namespace)
 	return store.Last(name)
 }

@@ -5,17 +5,16 @@ import (
 	"fmt"
 
 	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
-	helmcontrollers "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
+	helmcontroller "github.com/aiyengar2/helm-locker/pkg/generated/controllers/helm.cattle.io/v1alpha1"
 	"github.com/aiyengar2/helm-locker/pkg/objectset"
 	"github.com/aiyengar2/helm-locker/pkg/objectset/parser"
 	"github.com/aiyengar2/helm-locker/pkg/releases"
 	"github.com/rancher/lasso/pkg/controller"
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	corecontroller "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
@@ -28,10 +27,10 @@ const (
 type handler struct {
 	systemNamespace string
 
-	helmReleases     helmcontrollers.HelmReleaseController
-	helmReleaseCache helmcontrollers.HelmReleaseCache
-	secrets          corecontrollers.SecretController
-	secretCache      corecontrollers.SecretCache
+	helmReleases     helmcontroller.HelmReleaseController
+	helmReleaseCache helmcontroller.HelmReleaseCache
+	secrets          corecontroller.SecretController
+	secretCache      corecontroller.SecretCache
 
 	releases releases.HelmReleaseGetter
 
@@ -42,10 +41,10 @@ type handler struct {
 func Register(
 	ctx context.Context,
 	systemNamespace string,
-	helmReleases helmcontrollers.HelmReleaseController,
-	helmReleaseCache helmcontrollers.HelmReleaseCache,
-	secrets corecontrollers.SecretController,
-	secretCache corecontrollers.SecretCache,
+	helmReleases helmcontroller.HelmReleaseController,
+	helmReleaseCache helmcontroller.HelmReleaseCache,
+	secrets corecontroller.SecretController,
+	secretCache corecontroller.SecretCache,
 	k8s kubernetes.Interface,
 	lockableObjectSetRegister objectset.LockableObjectSetRegister,
 	lockableObjectSetHandler *controller.SharedHandler,
@@ -100,7 +99,7 @@ func helmReleaseToReleaseKey(helmRelease *v1alpha1.HelmRelease) ([]string, error
 }
 
 func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj runtime.Object) ([]relatedresource.Key, error) {
-	secret, ok := obj.(*v1.Secret)
+	secret, ok := obj.(*corev1.Secret)
 	if !ok {
 		return nil, nil
 	}

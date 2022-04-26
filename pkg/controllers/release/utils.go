@@ -3,9 +3,9 @@ package release
 import (
 	"fmt"
 
-	"github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
+	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
 	"github.com/rancher/wrangler/pkg/relatedresource"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -23,7 +23,7 @@ func releaseKeyFromRelease(release *v1alpha1.HelmRelease) relatedresource.Key {
 	}
 }
 
-func releaseKeyFromSecret(secret *v1.Secret) *relatedresource.Key {
+func releaseKeyFromSecret(secret *corev1.Secret) *relatedresource.Key {
 	if !isHelmReleaseSecret(secret) {
 		return nil
 	}
@@ -37,6 +37,6 @@ func releaseKeyFromSecret(secret *v1.Secret) *relatedresource.Key {
 	}
 }
 
-func isHelmReleaseSecret(secret *v1.Secret) bool {
+func isHelmReleaseSecret(secret *corev1.Secret) bool {
 	return secret.Type == HelmReleaseSecretType
 }
