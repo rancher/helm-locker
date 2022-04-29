@@ -9,6 +9,10 @@ Once installed, a user can create a `HelmRelease` CR in the `Helm Release Regist
 
 Once created, the Helm Locker controllers will watch all resources tracked by the Helm Release Secret and automatically revert any changes to the persisted resources that were not made through Helm (e.g. changes that were directly applied via `kubectl` or other controllers).
 
+## Getting Started
+
+For more information, see the [Getting Started guide](docs/gettingstarted.md).
+
 ## Who needs Helm Locker?
 
 Anyone who would like to declaratively manage resources deployed by existing Helm chart releases.
