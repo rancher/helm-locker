@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// WriteFiles writes CRDs to the path specified
+// WriteFile writes CRDs to the path specified
 func WriteFile(filename string) error {
 	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
 		return err
