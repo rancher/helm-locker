@@ -8,13 +8,26 @@ import (
 const (
 	// Helm Release Statuses
 
+	// SecretNotFoundState is the state when a Helm release secret has not been found for this HelmRelease
 	SecretNotFoundState = "SecretNotFound"
-	UnknownState        = "Unknown"
-	DeployedState       = "Deployed"
-	UninstalledState    = "Uninstalled"
-	ErrorState          = "Error"
-	FailedState         = "Failed"
-	TransitioningState  = "Transitioning"
+
+	// UnknownState is the state when the Helm release secret reports that it does not know the state of the underlying Helm release
+	UnknownState = "Unknown"
+
+	// DeployedState is the state where the underlying Helm release has been successfully deployed, indicating Helm Locker should lock the release
+	DeployedState = "Deployed"
+
+	// UninstalledState is the state when the underlying Helm release is uninstalled but the Helm release secret has not been deleted
+	UninstalledState = "Uninstalled"
+
+	// ErrorState is a state where Helm Locker has encountered an unexpected bug on trying to parse the underlying Helm release
+	ErrorState = "Error"
+
+	// FailedState is the state when the underlying Helm release has failed its last Helm operation
+	FailedState = "Failed"
+
+	// TransitioningState is the transitionary state when a Helm operation is being performed on the release (install, upgrade, uninstall)
+	TransitioningState = "Transitioning"
 )
 
 // +genclient

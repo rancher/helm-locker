@@ -75,10 +75,7 @@ func (in *objectSetState) DeepCopy() *objectSetState {
 
 // DeepCopyObject is a deepcopy function, copying the receiver, creating a new runtime.Object.
 func (in *objectSetState) DeepCopyObject() runtime.Object {
-	if c := in.DeepCopy(); c != nil {
-		return c
-	}
-	return nil
+	return in.DeepCopy()
 }
 
 // objectSetStateList represents a list of objectSetStates
@@ -116,8 +113,5 @@ func (in *objectSetStateList) DeepCopy() *objectSetStateList {
 
 // DeepCopyObject is a deepcopy function, copying the receiver, creating a new runtime.Object.
 func (in *objectSetStateList) DeepCopyObject() runtime.Object {
-	if c := in.DeepCopy(); c != nil {
-		return c
-	}
-	return nil
+	return in.DeepCopy()
 }

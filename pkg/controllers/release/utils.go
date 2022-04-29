@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	// HelmReleaseSecretType is the type of a secret that is considered a Helm Release secret
 	HelmReleaseSecretType = "helm.sh/release.v1"
 )
 

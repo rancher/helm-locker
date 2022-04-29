@@ -13,15 +13,15 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-// NewLockableObjectSetRegister returns a starter that starts an ObjectSetController listening to events on ObjectSetStates
-// and a LockableObjectSetRegister that allows you to register new states for ObjectSets in memory
-func NewLockableObjectSetRegister(name string, apply apply.Apply, scf controller.SharedControllerFactory, discovery discovery.DiscoveryInterface, opts *controller.Options) (start.Starter, LockableObjectSetRegister, *controller.SharedHandler) {
+// NewLockableRegister returns a starter that starts an ObjectSetController listening to events on ObjectSetStates
+// and a LockableRegister that allows you to register new states for ObjectSets in memory
+func NewLockableRegister(name string, apply apply.Apply, scf controller.SharedControllerFactory, discovery discovery.DiscoveryInterface, opts *controller.Options) (start.Starter, LockableRegister, *controller.SharedHandler) {
 	// Define a new cache
 	apply = apply.WithCacheTypeFactory(informerfactory.New(scf))
 
 	handler := handler{
 		apply:         apply,
-		gvkLister:     gvk.NewGVKLister(discovery),
+		gvkLister:     gvk.NewLister(discovery),
 		sharedHandler: &controller.SharedHandler{},
 	}
 

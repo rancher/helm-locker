@@ -18,14 +18,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// LockableObjectSetRegister implements ObjectSetRegister and ObjectSetLocker
-type LockableObjectSetRegister interface {
-	ObjectSetRegister
-	ObjectSetLocker
+// LockableRegister implements Register and Locker
+type LockableRegister interface {
+	Register
+	Locker
 }
 
-// ObjectSetRegister can keep track of sets of ObjectSets
-type ObjectSetRegister interface {
+// Register can keep track of sets of ObjectSets
+type Register interface {
 	relatedresource.Enqueuer
 
 	// Set allows you to set and lock an objectset associated with a specific key
@@ -36,8 +36,8 @@ type ObjectSetRegister interface {
 	Delete(key relatedresource.Key, purge bool)
 }
 
-// ObjectSetLocker can lock or unlock object sets tied to a specific key
-type ObjectSetLocker interface {
+// Locker can lock or unlock object sets tied to a specific key
+type Locker interface {
 	// Lock allows you to lock an objectset associated with a specific key
 	Lock(key relatedresource.Key)
 
@@ -46,11 +46,11 @@ type ObjectSetLocker interface {
 }
 
 // newLockableObjectSetRegisterAndCache returns:
-// 1) a LockableObjectSetRegister that allows registering new ObjectSets, locking them, unlocking them, or deleting them
+// 1) a LockableRegister that allows registering new ObjectSets, locking them, unlocking them, or deleting them
 // 2) a cache.SharedIndexInformer that listens to events on objectSetStates that are created from interacting with the provided register
 //
 // Note: This function is intentionally internal since the cache.SharedIndexInformer responds to an internal runtime.Object type (objectSetState)
-func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory, triggerOnDelete func(string, bool)) (LockableObjectSetRegister, cache.SharedIndexInformer) {
+func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory, triggerOnDelete func(string, bool)) (LockableRegister, cache.SharedIndexInformer) {
 	c := lockableObjectSetRegisterAndCache{
 		stateByKey:            make(map[relatedresource.Key]*objectSetState),
 		keyByResourceKeyByGVK: make(map[schema.GroupVersionKind]map[relatedresource.Key]relatedresource.Key),
@@ -60,7 +60,7 @@ func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory
 		triggerOnDelete: triggerOnDelete,
 	}
 	// initialize watcher that populates watch queue
-	c.gvkWatcher = gvk.NewGVKWatcher(scf, c.Resolve, &c)
+	c.gvkWatcher = gvk.NewWatcher(scf, c.Resolve, &c)
 	// initialize informer
 	c.SharedIndexInformer = cache.NewSharedIndexInformer(&c, &objectSetState{}, 10*time.Hour, cache.Indexers{
 		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
@@ -69,7 +69,7 @@ func newLockableObjectSetRegisterAndCache(scf controller.SharedControllerFactory
 }
 
 // lockableObjectSetRegisterAndCache is a cache.SharedIndexInformer that operates on objectSetStates
-// and implements the LockableObjectSetRegister interface via the informer
+// and implements the LockableRegister interface via the informer
 //
 // internal note: also implements cache.ListerWatcher on objectSetStates
 // internal note: also implements watch.Interface on objectSetStates
@@ -81,13 +81,13 @@ type lockableObjectSetRegisterAndCache struct {
 	// gvkWatcher watches all GVKs tied to resources tracked by any ObjectSet tracked by this register
 	// It will automatically trigger an Enqueue on seeing changes, which will trigger an event that
 	// the underlying cache.SharedIndexInformer will process
-	gvkWatcher gvk.GVKWatcher
+	gvkWatcher gvk.Watcher
 	// started represents whether the cache has been started yet
 	started bool
 	// startLock is a lock that prevents a Watch from occurring before the Informer has been started
 	startLock sync.RWMutex
 
-	// stateByKey is a map that keeps track of the desired state of the ObjectSetRegister
+	// stateByKey is a map that keeps track of the desired state of the Register
 	stateByKey map[relatedresource.Key]*objectSetState
 	// stateMapLock is a lock on the stateByKey map
 	stateMapLock sync.RWMutex
@@ -201,8 +201,8 @@ func (c *lockableObjectSetRegisterAndCache) Enqueue(namespace, name string) {
 	c.setState(key, nil, nil, true)
 }
 
-// Resolve allows you to resolve an object seen in the cluster to an ObjectSet tracked in this LockableObjectSetRegister
-// Objects will only be resolved if the LockableObjectSetRegister has locked this ObjectSet
+// Resolve allows you to resolve an object seen in the cluster to an ObjectSet tracked in this LockableRegister
+// Objects will only be resolved if the LockableRegister has locked this ObjectSet
 func (c *lockableObjectSetRegisterAndCache) Resolve(gvk schema.GroupVersionKind, namespace, name string, _ runtime.Object) ([]relatedresource.Key, error) {
 	resourceKey := keyFunc(namespace, name)
 
@@ -241,7 +241,7 @@ func (c *lockableObjectSetRegisterAndCache) setState(key relatedresource.Key, os
 		s = newObjectSetState(key.Namespace, key.Name, objectSetState{})
 	} else {
 		s = originalState.DeepCopy()
-		s.Generation += 1
+		s.Generation++
 		s.ResourceVersion = fmt.Sprintf("%d", s.Generation)
 	}
 

@@ -2,15 +2,10 @@ package release
 
 import (
 	v1alpha1 "github.com/aiyengar2/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
-	"github.com/pkg/errors"
 	rspb "helm.sh/helm/v3/pkg/release"
 )
 
-var (
-	ReleaseInfoParseErr = errors.New("unable to get release info from secret")
-)
-
-func NewReleaseInfo(release *rspb.Release) *releaseInfo {
+func newReleaseInfo(release *rspb.Release) *releaseInfo {
 	info := &releaseInfo{}
 	info.Version = int(release.Version)
 	info.Manifest = release.Manifest

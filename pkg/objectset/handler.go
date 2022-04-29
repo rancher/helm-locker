@@ -13,8 +13,8 @@ import (
 
 type handler struct {
 	apply     apply.Apply
-	gvkLister gvk.GVKLister
-	locker    ObjectSetLocker
+	gvkLister gvk.Lister
+	locker    Locker
 
 	// allows us to add hooks into triggering certain actions on reconciles, e.g. launching events
 	sharedHandler *controller.SharedHandler

@@ -39,7 +39,7 @@ type appContext struct {
 
 	Apply apply.Apply
 
-	ObjectSetRegister objectset.LockableObjectSetRegister
+	ObjectSetRegister objectset.LockableRegister
 	ObjectSetHandler  *controller.SharedHandler
 
 	EventBroadcaster record.EventBroadcaster
@@ -148,7 +148,7 @@ func newContext(ctx context.Context, systemNamespace string, cfg clientcmd.Clien
 
 	apply := apply.New(discovery, apply.NewClientFactory(client))
 
-	objectSet, objectSetRegister, objectSetHandler := objectset.NewLockableObjectSetRegister("object-set-register", apply, scf, discovery, nil)
+	objectSet, objectSetRegister, objectSetHandler := objectset.NewLockableRegister("object-set-register", apply, scf, discovery, nil)
 
 	return &appContext{
 		Interface: helmv,

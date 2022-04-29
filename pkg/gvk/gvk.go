@@ -13,29 +13,29 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// GVKResolver is a relatedresource.Resolver that can work on multiple GVKs
-type GVKResolver func(gvk schema.GroupVersionKind, namespace, name string, _ runtime.Object) ([]relatedresource.Key, error)
+// Resolver is a relatedresource.Resolver that can work on multiple GVKs
+type Resolver func(gvk schema.GroupVersionKind, namespace, name string, _ runtime.Object) ([]relatedresource.Key, error)
 
 // ForGVK returns the relatedresource.Resolver for a particular GVK
-func (r GVKResolver) ForGVK(gvk schema.GroupVersionKind) relatedresource.Resolver {
+func (r Resolver) ForGVK(gvk schema.GroupVersionKind) relatedresource.Resolver {
 	return func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
 		return r(gvk, namespace, name, obj)
 	}
 }
 
-// GVKWatcher starts controllers for one or more GVKs using the provided SharedControllerFactory
+// Watcher starts controllers for one or more GVKs using the provided SharedControllerFactory
 // After starting a GVK controller, it will register a relatedresource.Watch using the provided
-// relatedresource.Enqueuer and GVKResolver
-type GVKWatcher interface {
+// relatedresource.Enqueuer and Resolver
+type Watcher interface {
 	// Start will run all the watchers that have been registered thus far and deferred from starting
 	Start(ctx context.Context, workers int) error
-	// Watch will start a new watcher for a particular GVK; if the GVKWatcher has not started yet,
+	// Watch will start a new watcher for a particular GVK; if the Watcher has not started yet,
 	// watching will be deferred till the first Start call is made.
 	Watch(gvk schema.GroupVersionKind) error
 }
 
-// NewGVKWatcher returns an object that satisfies the GVKWatcher interface
-func NewGVKWatcher(scf controller.SharedControllerFactory, gvkResolver GVKResolver, enqueuer relatedresource.Enqueuer) GVKWatcher {
+// NewWatcher returns an object that satisfies the Watcher interface
+func NewWatcher(scf controller.SharedControllerFactory, gvkResolver Resolver, enqueuer relatedresource.Enqueuer) Watcher {
 	return &watcher{
 		scf:         scf,
 		gvkResolver: gvkResolver,
@@ -46,25 +46,25 @@ func NewGVKWatcher(scf controller.SharedControllerFactory, gvkResolver GVKResolv
 	}
 }
 
-// watcher is a GVKWatcher based on a provided resolver and enqueuer
+// watcher is a Watcher based on a provided resolver and enqueuer
 type watcher struct {
 
 	// scf is the controller.SharedControllerFactory to use to generate controllers from
 	scf controller.SharedControllerFactory
 
-	// gvkResolver is the GVKResolver that is used to register the relatedresource.Watch
-	gvkResolver GVKResolver
+	// gvkResolver is the Resolver that is used to register the relatedresource.Watch
+	gvkResolver Resolver
 
 	// enqueuer is the relatedresource.Enqueuer that is used to register the relatedresource.Watch
 	enqueuer relatedresource.Enqueuer
 
 	// gvkRegistered is the list of all gvks that have been registered for Watch
-	// note: the associated gvkControllers will not be started if this GVKWatcher has not been started yet
+	// note: the associated gvkControllers will not be started if this Watcher has not been started yet
 	gvkRegistered map[schema.GroupVersionKind]bool
 	// gvkStarted is the list of all gvks that have already started watching and triggering enqueues
 	gvkStarted map[schema.GroupVersionKind]bool
 
-	// started is whether the GVKWatcher has started actually registering relatedresource.Watch
+	// started is whether the Watcher has started actually registering relatedresource.Watch
 	started bool
 	// controllerCtx is the context provided on start that all watchers will use
 	controllerCtx context.Context
@@ -99,7 +99,7 @@ func (w *watcher) Start(ctx context.Context, workers int) error {
 	return multierr
 }
 
-// startGVK starts watching a particular GVK if the GVKWatcher has been started
+// startGVK starts watching a particular GVK if the Watcher has been started
 func (w *watcher) startGVK(gvk schema.GroupVersionKind) error {
 	if !w.started {
 		return nil

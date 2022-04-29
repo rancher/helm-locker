@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	// HelmReleaseByReleaseKey is the key used to get HelmRelease objects by the namespace/name of the underlying Helm Release it points to
 	HelmReleaseByReleaseKey = "helm.cattle.io/helm-release-by-release-key"
 )
 
@@ -34,7 +35,7 @@ type handler struct {
 
 	releases releases.HelmReleaseGetter
 
-	lockableObjectSetRegister objectset.LockableObjectSetRegister
+	lockableObjectSetRegister objectset.LockableRegister
 	recorder                  record.EventRecorder
 }
 
@@ -46,7 +47,7 @@ func Register(
 	secrets corecontroller.SecretController,
 	secretCache corecontroller.SecretCache,
 	k8s kubernetes.Interface,
-	lockableObjectSetRegister objectset.LockableObjectSetRegister,
+	lockableObjectSetRegister objectset.LockableRegister,
 	lockableObjectSetHandler *controller.SharedHandler,
 	recorder record.EventRecorder,
 ) {
@@ -168,7 +169,7 @@ func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (
 		return helmRelease, fmt.Errorf("unable to find latest Helm Release Secret tied to Helm Release %s: %s", helmRelease.GetName(), err)
 	}
 	logrus.Infof("loading latest release version %d of HelmRelease %s", latestRelease.Version, helmRelease.GetName())
-	releaseInfo := NewReleaseInfo(latestRelease)
+	releaseInfo := newReleaseInfo(latestRelease)
 	helmRelease, err = h.helmReleases.UpdateStatus(releaseInfo.GetUpdatedStatus(helmRelease))
 	if err != nil {
 		return helmRelease, fmt.Errorf("unable to update status of HelmRelease %s: %s", helmRelease.GetName(), err)

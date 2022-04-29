@@ -7,19 +7,19 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
-// GVKLister is any object that can list a set of GVKs or return an error
-type GVKLister interface {
+// Lister is any object that can list a set of GVKs or return an error
+type Lister interface {
 	List() ([]schema.GroupVersionKind, error)
 }
 
-// NewGVKLister returns an object that implements the GVKLister interface
-func NewGVKLister(discovery discovery.DiscoveryInterface) GVKLister {
+// NewLister returns an object that implements the Lister interface
+func NewLister(discovery discovery.DiscoveryInterface) Lister {
 	return &lister{
 		discovery: discovery,
 	}
 }
 
-// lister implements the GVKLister interface given the provided discovery interface
+// lister implements the Lister interface given the provided discovery interface
 type lister struct {
 	discovery discovery.DiscoveryInterface
 }
