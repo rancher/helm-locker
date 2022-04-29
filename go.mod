@@ -1,4 +1,4 @@
-module github.com/aiyengar2/helm-locker
+module github.com/rancher/helm-locker
 
 go 1.17
 
@@ -14,7 +14,6 @@ replace (
 require (
 	github.com/google/uuid v1.2.0
 	github.com/hashicorp/go-multierror v1.1.0
-	github.com/pkg/errors v0.9.1
 	github.com/rancher/lasso v0.0.0-20220303220127-8cf5555ec03c
 	github.com/rancher/wrangler v0.8.11-0.20220217210408-3ecd23dfea3b
 	github.com/rancher/wrangler-cli v0.0.0-20211112052728-f172e9bf59af
@@ -57,6 +56,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.17.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect

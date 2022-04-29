@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/aiyengar2/helm-locker/pkg/gvk"
-	"github.com/aiyengar2/helm-locker/pkg/informerfactory"
+	"github.com/rancher/helm-locker/pkg/gvk"
+	"github.com/rancher/helm-locker/pkg/informerfactory"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/start"

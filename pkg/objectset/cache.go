@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aiyengar2/helm-locker/pkg/gvk"
+	"github.com/rancher/helm-locker/pkg/gvk"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/objectset"
 	"github.com/rancher/wrangler/pkg/relatedresource"

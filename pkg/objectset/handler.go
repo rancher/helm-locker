@@ -3,7 +3,7 @@ package objectset
 import (
 	"fmt"
 
-	"github.com/aiyengar2/helm-locker/pkg/gvk"
+	"github.com/rancher/helm-locker/pkg/gvk"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/relatedresource"
