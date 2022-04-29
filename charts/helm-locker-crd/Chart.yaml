@@ -1,0 +1,15 @@
+apiVersion: v2
+name: helm-locker-crd
+description: Helm Locker CustomResourceDefinitions
+version: 0.0.1
+appVersion: 0.0.1
+annotations:
+  catalog.cattle.io/certified: rancher
+  catalog.cattle.io/hidden: "true"
+  catalog.cattle.io/namespace: cattle-helm-system
+  catalog.cattle.io/release-name: helm-locker-crd
+  catalog.cattle.io/os: linux,windows
+  catalog.cattle.io/permits-os: linux,windows
+maintainers:
+- email: arvind.iyengar@suse.com
+  name: aiyengar2

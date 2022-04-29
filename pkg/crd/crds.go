@@ -2,12 +2,79 @@ package crd
 
 import (
 	"context"
+	"io"
+	"os"
+	"path/filepath"
 
 	v1alpha1 "github.com/rancher/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
 	"github.com/rancher/wrangler/pkg/crd"
+	"github.com/rancher/wrangler/pkg/yaml"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 )
+
+// WriteFiles writes CRDs to the path specified
+func WriteFile(filename string) error {
+	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		return err
+	}
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return Print(f)
+}
+
+// Print prints CRDs to out
+func Print(out io.Writer) error {
+	obj, err := Objects(false)
+	if err != nil {
+		return err
+	}
+	data, err := yaml.Export(obj...)
+	if err != nil {
+		return err
+	}
+
+	objV1Beta1, err := Objects(true)
+	if err != nil {
+		return err
+	}
+	dataV1Beta1, err := yaml.Export(objV1Beta1...)
+	if err != nil {
+		return err
+	}
+
+	data = append([]byte("{{- if .Capabilities.APIVersions.Has \"apiextensions.k8s.io/v1\" -}}\n"), data...)
+	data = append(data, []byte("{{- else -}}\n---\n")...)
+	data = append(data, dataV1Beta1...)
+	data = append(data, []byte("{{- end -}}")...)
+	_, err = out.Write(data)
+	return err
+}
+
+// Objects returns runtime.Objects for every CRD
+func Objects(v1beta1 bool) (result []runtime.Object, err error) {
+	for _, crdDef := range List() {
+		if v1beta1 {
+			crd, err := crdDef.ToCustomResourceDefinitionV1Beta1()
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, crd)
+		} else {
+			crd, err := crdDef.ToCustomResourceDefinition()
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, crd)
+		}
+	}
+	return
+}
 
 // List returns the set of CRDs that need to be generated
 func List() []crd.CRD {

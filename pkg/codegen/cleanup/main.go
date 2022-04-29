@@ -14,4 +14,7 @@ func main() {
 	if err := os.RemoveAll("./pkg/generated"); err != nil {
 		logrus.Fatal(err)
 	}
+	if err := os.RemoveAll("./charts/helm-locker-crd/templates"); err != nil {
+		logrus.Fatal(err)
+	}
 }

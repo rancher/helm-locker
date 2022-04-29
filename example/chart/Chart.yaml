@@ -1,9 +1,0 @@
-apiVersion: v2
-appVersion: 0.1.1
-description: example chart deployment
-maintainers:
-- email: arvind.iyengar@suse.com
-  name: aiyengar2
-name: example-chart
-type: application
-version: 0.0.0

@@ -4,6 +4,6 @@
 /dist
 *.swp
 .idea
-helm-locker
+/helm-locker
 .vscode/
 .DS_Store
