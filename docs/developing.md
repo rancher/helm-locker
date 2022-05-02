@@ -77,3 +77,25 @@ objectset/
 If you modified `pkg/apis` or `generate.go`, make sure you run `go generate`.
 
 Also, make sure you run `go mod tidy`.
+
+## Creating a Docker image based off of your changes
+
+To test your changes and create a Docker image to a specific Docker repository with a given tag, you should run `REPO=<my-docker-repo> TAG=<my-docker-tag> make` (e.g. `REPO=arvindiyengar TAG=dev make`), which will run the `./scripts/ci` script that builds, tests, validates, and packages your changes into a local Docker image (if you run `docker images`, it should show up as an image in the format `${REPO}/helm-locker:${TAG}`).
+
+If you don't want to run all the steps in CI every time you make a change, you could also run the following one-liner to build and package the image:
+
+```bash
+REPO=<my-repo>
+TAG=<my-tag>
+
+GOOS=linux CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o bin/helm-locker && REPO=${REPO} TAG=${TAG} make package
+```
+
+Once the image is successfully packaged, simply run `docker push ${REPO}/helm-locker:${TAG}` to push your image to your Docker repository.
+
+## Testing a custom Docker image build
+
+1. Deploy the Helm Locker CRD chart as a Helm 3 chart onto your cluster: ensure that your `KUBECONFIG` environment variable is pointing to your cluster (e.g. `export KUBECONFIG=<path-to-kubeconfig>; kubectl get nodes` should show the nodes of your cluster), pull in this repository locally, and from the root of this repository run `helm upgrade --install helm-locker-crd -n cattle-helm-system charts/helm-locker-crd`
+2. Deploy the Helm Locker chart as a Helm 3 chart onto your cluster after overriding the image and tag values with your Docker repository and tag: run `helm upgrade --install --set image.repository="${REPO}/helm-locker" --set image.tag="${TAG}" --set image.pullPolicy=Always helm-locker -n cattle-helm-system charts/helm-locker`
+> Note: Why do we set the Image Pull Policy to `Always`? If you update the Docker image on your fork, setting the Image Pull Policy to `Always` ensures that running `kubectl rollout restart -n cattle-helm-system deployment/helm-locker` is all you need to do to update your running deployment to the new image, since this would ensure redeploying a deployment triggers a image pull that uses your most up-to-date Docker image.
+3. Profit!

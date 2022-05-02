@@ -33,6 +33,14 @@ Therefore, if Helm Locker observes a Helm Release Secret tied to a `HelmRelease`
 
 However, once a release is `deployed`, if what is tracked in the Helm secret is different than what is currently installed onto the cluster, Helm Locker will revert all resources back to what was tracked by the Helm release (in case a change was made to the resource tracked by the Helm Release while the release was being modified).
 
+## Developing
+
+### Which branch do I make changes on?
+
+Helm Locker is built and released off the contents of the `main` branch. To make a contribution, open up a PR to the `main` branch.
+
+For more information, see the [Developing guide](docs/developing.md).
+
 ## Debugging
 
 ### How do I manually inspect the content of the Helm Release Secret to debug a possible Helm Locker issue?
