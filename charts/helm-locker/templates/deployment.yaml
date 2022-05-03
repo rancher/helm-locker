@@ -23,6 +23,7 @@ spec:
           args:
           - {{ template "helm-locker.name" . }}
           - --namespace={{ template "helm-locker.namespace" . }}
+          - --controller-name={{ template "helm-locker.name" . }}
 {{- if .Values.debug }}
           - --debug
           - --debug-level={{ .Values.debugLevel }}

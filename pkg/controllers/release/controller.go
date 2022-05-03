@@ -23,10 +23,14 @@ import (
 const (
 	// HelmReleaseByReleaseKey is the key used to get HelmRelease objects by the namespace/name of the underlying Helm Release it points to
 	HelmReleaseByReleaseKey = "helm.cattle.io/helm-release-by-release-key"
+
+	// ManagedBy is an annotation attached to HelmRelease objects that indicates that they are managed by this operator
+	ManagedBy = "helmreleases.cattle.io/managed-by"
 )
 
 type handler struct {
 	systemNamespace string
+	managedBy       string
 
 	helmReleases     helmcontroller.HelmReleaseController
 	helmReleaseCache helmcontroller.HelmReleaseCache
@@ -41,7 +45,7 @@ type handler struct {
 
 func Register(
 	ctx context.Context,
-	systemNamespace string,
+	systemNamespace, managedBy string,
 	helmReleases helmcontroller.HelmReleaseController,
 	helmReleaseCache helmcontroller.HelmReleaseCache,
 	secrets corecontroller.SecretController,
@@ -54,6 +58,7 @@ func Register(
 
 	h := &handler{
 		systemNamespace: systemNamespace,
+		managedBy:       managedBy,
 
 		helmReleases:     helmReleases,
 		helmReleaseCache: helmReleaseCache,
@@ -125,17 +130,44 @@ func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj run
 	return keys, nil
 }
 
-func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
+// shouldManage determines if this HelmRelease should be handled by this operator
+func (h *handler) shouldManage(helmRelease *v1alpha1.HelmRelease) (bool, error) {
 	if helmRelease == nil {
-		return nil, nil
+		return false, nil
 	}
 	if helmRelease.Namespace != h.systemNamespace {
-		// do nothing if it's not in the namespace this controller was registered with
-		return nil, nil
+		return false, nil
+	}
+	if helmRelease.Annotations != nil {
+		managedBy, ok := helmRelease.Annotations[ManagedBy]
+		if ok {
+			// if the label exists, only handle this if the managedBy label matches that of this controller
+			return managedBy == h.managedBy, nil
+		}
+	}
+	// The managedBy label does not exist, so we trigger claiming the HelmRelease
+	// We then return false since this update will automatically retrigger an OnChange operation
+	helmReleaseCopy := helmRelease.DeepCopy()
+	if helmReleaseCopy.Annotations == nil {
+		helmReleaseCopy.SetAnnotations(map[string]string{
+			ManagedBy: h.managedBy,
+		})
+	} else {
+		helmReleaseCopy.Annotations[ManagedBy] = h.managedBy
+	}
+	_, err := h.helmReleases.Update(helmReleaseCopy)
+	return false, err
+}
+
+func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
+	if shouldManage, err := h.shouldManage(helmRelease); err != nil {
+		return helmRelease, err
+	} else if !shouldManage {
+		return helmRelease, nil
 	}
 	if helmRelease.Status.State == v1alpha1.SecretNotFoundState || helmRelease.Status.State == v1alpha1.UninstalledState {
 		// HelmRelease was not tracking any underlying objectSet
-		return nil, nil
+		return helmRelease, nil
 	}
 	// HelmRelease CRs are only pointers to Helm releases... if the HelmRelease CR is removed, we should do nothing, but should warn the user
 	// that we are leaving behind resources in the cluster
@@ -143,16 +175,17 @@ func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRele
 	logrus.Warnf("To delete the contents of a Helm release automatically, delete the Helm release secret before deleting the HelmRelease.")
 	releaseKey := releaseKeyFromRelease(helmRelease)
 	h.lockableObjectSetRegister.Delete(releaseKey, false) // remove the objectset, but don't purge the underlying resources
-	return nil, nil
+	return helmRelease, nil
 }
 
 func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
-	if helmRelease == nil || helmRelease.DeletionTimestamp != nil {
-		return nil, nil
+	if shouldManage, err := h.shouldManage(helmRelease); err != nil {
+		return helmRelease, err
+	} else if !shouldManage {
+		return helmRelease, nil
 	}
-	if helmRelease.Namespace != h.systemNamespace {
-		// do nothing if it's not in the namespace this controller was registered with
-		return nil, nil
+	if helmRelease.DeletionTimestamp != nil {
+		return helmRelease, nil
 	}
 	releaseKey := releaseKeyFromRelease(helmRelease)
 	latestRelease, err := h.releases.Last(releaseKey.Namespace, releaseKey.Name)

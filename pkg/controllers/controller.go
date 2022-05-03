@@ -51,7 +51,7 @@ func (a *appContext) start(ctx context.Context) error {
 	return start.All(ctx, 50, a.starters...)
 }
 
-func Register(ctx context.Context, systemNamespace, nodeName string, cfg clientcmd.ClientConfig) error {
+func Register(ctx context.Context, systemNamespace, controllerName, nodeName string, cfg clientcmd.ClientConfig) error {
 	if len(systemNamespace) == 0 {
 		return errors.New("cannot start controllers on system namespace: system namespace not provided")
 	}
@@ -70,9 +70,14 @@ func Register(ctx context.Context, systemNamespace, nodeName string, cfg clientc
 		Host:      nodeName,
 	})
 
+	if len(controllerName) == 0 {
+		controllerName = "helm-locker"
+	}
+
 	// TODO: Register all controllers
 	release.Register(ctx,
 		systemNamespace,
+		controllerName,
 		appCtx.HelmRelease(),
 		appCtx.HelmRelease().Cache(),
 		appCtx.Core.Secret(),
