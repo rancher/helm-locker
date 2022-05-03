@@ -39,19 +39,6 @@ func Print(out io.Writer) error {
 		return err
 	}
 
-	objV1Beta1, err := Objects(true)
-	if err != nil {
-		return err
-	}
-	dataV1Beta1, err := yaml.Export(objV1Beta1...)
-	if err != nil {
-		return err
-	}
-
-	data = append([]byte("{{- if .Capabilities.APIVersions.Has \"apiextensions.k8s.io/v1\" -}}\n"), data...)
-	data = append(data, []byte("{{- else -}}\n---\n")...)
-	data = append(data, dataV1Beta1...)
-	data = append(data, []byte("{{- end -}}")...)
 	_, err = out.Write(data)
 	return err
 }

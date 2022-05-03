@@ -4,23 +4,16 @@
 
 ```bash
 ## This directory contains Helm charts that can be used to deploy Helm Locker in a Kubernetes cluster in the cattle-helm-system namespace
-##
-## By default, you should always install the Helm Locker CRD chart before installing the main Helm Locker chart.
 charts/
-  
-  ## The CRD chart that installs the HelmRelease CRD. This must be installed before installing all other charts.
-  helm-locker-crd/
 
   ## The main chart that deploys Helm Locker in the cluster.
-  ##
-  ## Depends on 'helm-locker-crd' being deployed onto the cluster first.
   helm-locker/
   
   ## A dummy chart that can be deployed as a Helm release in the cluster under the release name 'helm-locker-example' and the namespace 'cattle-helm-system'
   ##
   ## By default, it deploys with a HelmRelease CR that targets itself.
   ##
-  ## Depends on 'helm-locker-crd' and 'helm-locker' being deployed onto the cluster first.
+  ## Depends on 'helm-locker' being deployed onto the cluster first.
   helm-locker-example/
 
 ## This directory will contain additional docs to assist users in getting started with using Helm Locker
@@ -36,7 +29,7 @@ pkg/
 ## The Dockerfile used to run CI and other scripts executed by make in a Docker container (powered by https://github.com/rancher/dapper)
 Dockerfile.dapper
 
-## The file that contains the underlying actions that 'go generate' needs to execute on a call to it. Includes the logic for generating controllers and updating the CRD packaged into the CRD chart
+## The file that contains the underlying actions that 'go generate' needs to execute on a call to it. Includes the logic for generating controllers and updating crds.yaml under the crds/ directory
 generate.go
 
 ## The main entrypoint into HelmLocker
