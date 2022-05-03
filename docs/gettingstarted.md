@@ -35,7 +35,7 @@ helm install -n cattle-helm-system helm-locker-example charts/helm-locker-exampl
 After deleting the Helm Charts, you may want to manually uninstall the CRDs from the cluster to clean them up:
 
 ```bash
-kubectl delete crds helmcharts.helm.cattle.io
+kubectl delete crds helmreleases.helm.cattle.io
 ```
 
 > Note: Why aren't we packaging Helm Locker CRDs in a CRD chart? Since Helm Locker CRDs can be used for other projects (e.g. [rancher/helm-project-operator](https://github.com/rancher/helm-project-operator), [rancher/prometheus-federator](https://github.com/rancher/prometheus-federator), etc.) and Helm Locker itself can be deployed multiple times to the same cluster, the ownership model of having a single CRD chart that manages installing, upgrading, and uninstalling Helm Locker CRDs isn't a good model for managing CRDs. Instead, it's left as an explicit action that the user should take in order to delete the Helm Locker CRDs from the cluster with caution that it could affect other deployments reliant on those CRDs.
