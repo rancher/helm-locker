@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/helm-locker/pkg/objectset"
 	"github.com/rancher/helm-locker/pkg/objectset/parser"
 	"github.com/rancher/helm-locker/pkg/releases"
+	"github.com/rancher/helm-locker/pkg/remove"
 	"github.com/rancher/lasso/pkg/controller"
 	corecontroller "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/relatedresource"
@@ -78,7 +79,20 @@ func Register(
 	relatedresource.Watch(ctx, "on-helm-secret-change", h.resolveHelmRelease, helmReleases, secrets)
 
 	helmReleases.OnChange(ctx, "apply-lock-on-release", h.OnHelmRelease)
-	helmReleases.OnRemove(ctx, "on-remove", h.OnHelmReleaseRemove)
+
+	remove.RegisterScopedOnRemoveHandler(ctx, helmReleases, "on-helm-release-remove",
+		func(key string, obj runtime.Object) (bool, error) {
+			if obj == nil {
+				return false, nil
+			}
+			helmRelease, ok := obj.(*v1alpha1.HelmRelease)
+			if !ok {
+				return false, nil
+			}
+			return h.shouldManage(helmRelease)
+		},
+		helmcontroller.FromHelmReleaseHandlerToHandler(h.OnHelmReleaseRemove),
+	)
 }
 
 func (h *handler) OnObjectSetChange(setID string, obj runtime.Object) (runtime.Object, error) {
@@ -160,10 +174,8 @@ func (h *handler) shouldManage(helmRelease *v1alpha1.HelmRelease) (bool, error) 
 }
 
 func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
-	if shouldManage, err := h.shouldManage(helmRelease); err != nil {
-		return helmRelease, err
-	} else if !shouldManage {
-		return helmRelease, nil
+	if helmRelease == nil {
+		return nil, nil
 	}
 	if helmRelease.Status.State == v1alpha1.SecretNotFoundState || helmRelease.Status.State == v1alpha1.UninstalledState {
 		// HelmRelease was not tracking any underlying objectSet
