@@ -47,7 +47,7 @@ namespaceOverride: ""
 
 image:
   repository: rancher/helm-locker
-  tag: v0.0.1-rc3
+  tag: v0.0.1
   pullPolicy: IfNotPresent
 
 # Additional arguments to be passed into the Helm Locker image
