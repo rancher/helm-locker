@@ -45,6 +45,8 @@ nameOverride: ""
 
 namespaceOverride: ""
 
+replicas: 1
+
 image:
   repository: rancher/helm-locker
   tag: v0.0.1
