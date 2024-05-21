@@ -152,7 +152,7 @@ func (c *lockableObjectSetRegisterAndCache) List(options metav1.ListOptions) (ru
 
 // List returns an watch.Interface if the cache has been started that watches for events on objectSetStates
 // Allows implementing cache.ListerWatcher on objectSetStates
-func (c *lockableObjectSetRegisterAndCache) Watch(options metav1.ListOptions) (watch.Interface, error) {
+func (c *lockableObjectSetRegisterAndCache) Watch(_ metav1.ListOptions) (watch.Interface, error) {
 	c.startLock.RLock()
 	defer c.startLock.RUnlock()
 	if !c.started {

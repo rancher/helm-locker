@@ -13,7 +13,7 @@ type controllerToStarterWrapper struct {
 }
 
 // Sync does a noop
-func (w controllerToStarterWrapper) Sync(ctx context.Context) error {
+func (w controllerToStarterWrapper) Sync(_ context.Context) error {
 	return nil
 }
 
