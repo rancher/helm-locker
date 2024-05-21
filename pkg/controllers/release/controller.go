@@ -81,7 +81,7 @@ func Register(
 	helmReleases.OnChange(ctx, "apply-lock-on-release", h.OnHelmRelease)
 
 	remove.RegisterScopedOnRemoveHandler(ctx, helmReleases, "on-helm-release-remove",
-		func(key string, obj runtime.Object) (bool, error) {
+		func(_ string, obj runtime.Object) (bool, error) {
 			if obj == nil {
 				return false, nil
 			}
@@ -118,7 +118,7 @@ func helmReleaseToReleaseKey(helmRelease *v1alpha1.HelmRelease) ([]string, error
 	return []string{releaseKeyToString(releaseKey)}, nil
 }
 
-func (h *handler) resolveHelmRelease(secretNamespace, secretName string, obj runtime.Object) ([]relatedresource.Key, error) {
+func (h *handler) resolveHelmRelease(_ /* secretNamespace */, _ /* secretName */ string, obj runtime.Object) ([]relatedresource.Key, error) {
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
 		return nil, nil
@@ -173,7 +173,7 @@ func (h *handler) shouldManage(helmRelease *v1alpha1.HelmRelease) (bool, error) 
 	return false, err
 }
 
-func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
+func (h *handler) OnHelmReleaseRemove(_ string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
 	if helmRelease == nil {
 		return nil, nil
 	}
@@ -190,7 +190,7 @@ func (h *handler) OnHelmReleaseRemove(key string, helmRelease *v1alpha1.HelmRele
 	return helmRelease, nil
 }
 
-func (h *handler) OnHelmRelease(key string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
+func (h *handler) OnHelmRelease(_ string, helmRelease *v1alpha1.HelmRelease) (*v1alpha1.HelmRelease, error) {
 	if shouldManage, err := h.shouldManage(helmRelease); err != nil {
 		return helmRelease, err
 	} else if !shouldManage {
