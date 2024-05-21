@@ -1,6 +1,6 @@
 module github.com/rancher/helm-locker
 
-go 1.19
+go 1.22.3
 
 replace (
 	k8s.io/api => k8s.io/api v0.23.3
