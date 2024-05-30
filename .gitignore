@@ -7,3 +7,5 @@
 /helm-locker
 .vscode/
 .DS_Store
+kubeconfig.yaml
+*.test
