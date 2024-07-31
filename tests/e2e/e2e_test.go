@@ -30,7 +30,7 @@ const (
 	objectSetHash = "objectset.rio.cattle.io/hash"
 
 	objectSetApplied  = "objectset.rio.cattle.io/applied"
-	objsetSetId       = "objectset.rio.cattle.io/id"
+	objsetSetID       = "objectset.rio.cattle.io/id"
 	objectSetOnwerGVK = "objectset.rio.cattle.io/owner-gvk"
 	ownerName         = "objectset.rio.cattle.io/owner-name"
 	ownerNamespace    = "objectset.rio.cattle.io/owner-namespace"
@@ -58,7 +58,7 @@ var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration")
 		Expect(crd.Create(testCtx, cfg)).To(Succeed())
 		go func() {
 			if err := controllers.Register(testCtx, ns, "helm-locker", "node1", clientCmdCfg); err != nil {
-				Fail(fmt.Sprintf("Failed to register controllers %s", err))
+				GinkgoWriter.Write([]byte(fmt.Sprintf("Failed to register controllers: %s", err)))
 			}
 		}()
 	})
@@ -201,7 +201,7 @@ var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration")
 						origApplied = val
 					}
 
-					if val, ok := retCfg.Annotations[objsetSetId]; !ok || val != "object-set-applier" {
+					if val, ok := retCfg.Annotations[objsetSetID]; !ok || val != "object-set-applier" {
 						errs = append(errs, fmt.Errorf("objectset id not found or incorrect: '%s'", val))
 					}
 					if val, ok := retCfg.Annotations[objectSetOnwerGVK]; !ok || val != "internal.cattle.io/v1alpha1, Kind=objectSetState" {

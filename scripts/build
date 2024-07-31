@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+echo "Building helm-locker"
+
 source $(dirname $0)/version
 
 cd $(dirname $0)/..
