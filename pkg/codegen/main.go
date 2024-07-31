@@ -7,23 +7,28 @@ import (
 	"github.com/rancher/helm-locker/pkg/crd"
 	"github.com/sirupsen/logrus"
 
-	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
-	"github.com/rancher/wrangler/pkg/controller-gen/args"
+	"github.com/rancher/wrangler/v3/pkg/cleanup"
+	controllergen "github.com/rancher/wrangler/v3/pkg/controller-gen"
+	"github.com/rancher/wrangler/v3/pkg/controller-gen/args"
 )
 
 func main() {
-	if len(os.Args) > 2 && os.Args[1] == "crds" {
-		if len(os.Args) != 3 {
-			logrus.Fatal("usage: ./codegen crds <crd-directory>")
-		}
-		logrus.Infof("Writing CRDs to %s", os.Args[2])
-		if err := crd.WriteFile(os.Args[2]); err != nil {
-			panic(err)
-		}
-		return
+	logrus.Infof("Generating code")
+	if err := cleanup.Cleanup("./pkg/apis"); err != nil {
+		logrus.Fatal(err)
+	}
+
+	if err := os.RemoveAll("./pkg/generated"); err != nil {
+		logrus.Fatal(err)
+	}
+
+	if err := os.RemoveAll("./crds"); err != nil {
+		logrus.Fatal(err)
 	}
 
 	os.Unsetenv("GOPATH")
+
+	logrus.Info("Generating controller boilerplate")
 	controllergen.Run(args.Options{
 		OutputPackage: "github.com/rancher/helm-locker/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
@@ -36,4 +41,9 @@ func main() {
 			},
 		},
 	})
+	crdPath := "./crds/crds.yaml"
+	logrus.Infof("Writing CRDS to %s", crdPath)
+	if err := crd.WriteFile(crdPath); err != nil {
+		logrus.Fatal(err)
+	}
 }
