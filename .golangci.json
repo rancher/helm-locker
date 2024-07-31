@@ -23,6 +23,10 @@
 			{
 				"linters": "revive",
 				"text": "should have comment or be unexported"
+			},
+			{
+				"linters": "revive",
+				"text": "dot-imports"
 			}
 		]
 	}

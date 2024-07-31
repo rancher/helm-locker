@@ -7,6 +7,8 @@ import (
 
 	. "github.com/kralicky/kmatch"
 	"github.com/rancher/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
+	"github.com/rancher/helm-locker/pkg/controllers"
+	"github.com/rancher/helm-locker/pkg/crd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,7 +30,7 @@ const (
 	objectSetHash = "objectset.rio.cattle.io/hash"
 
 	objectSetApplied  = "objectset.rio.cattle.io/applied"
-	objsetSetId       = "objectset.rio.cattle.io/id"
+	objsetSetID       = "objectset.rio.cattle.io/id"
 	objectSetOnwerGVK = "objectset.rio.cattle.io/owner-gvk"
 	ownerName         = "objectset.rio.cattle.io/owner-name"
 	ownerNamespace    = "objectset.rio.cattle.io/owner-namespace"
@@ -40,6 +42,27 @@ const (
 )
 
 var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration"), func() {
+
+	BeforeAll(func() {
+		By("setting up and running the helm locker operator")
+		ns := "cattle-helm-system"
+		err := k8sClient.Create(testCtx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ns,
+			},
+		})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Fail(fmt.Sprintf("Failed to create namespace %s", err))
+		}
+
+		Expect(crd.Create(testCtx, cfg)).To(Succeed())
+		go func() {
+			if err := controllers.Register(testCtx, ns, "helm-locker", "node1", clientCmdCfg); err != nil {
+				GinkgoWriter.Write([]byte(fmt.Sprintf("Failed to register controllers: %s", err)))
+			}
+		}()
+	})
+
 	When("we use the helm locker operator", func() {
 		Specify("Expect to find prerequisited CRDs in test cluster", func() {
 			// loosely checks that the embedded helm controller is installed
@@ -50,19 +73,6 @@ var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration")
 			}
 
 			Eventually(GVK(gvk)).Should(Exist())
-		})
-
-		It("should run the helm project operator", func() {
-			// TODO : setup helm controller here, once we fix the dependency mess
-			ns := "cattle-helm-system"
-			err := k8sClient.Create(testCtx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: ns,
-				},
-			})
-			if err != nil && !apierrors.IsAlreadyExists(err) {
-				Fail(fmt.Sprintf("Failed to create namespace %s", err))
-			}
 		})
 
 		It("Should have applied the helmrelease CRD", func() {
@@ -191,7 +201,7 @@ var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration")
 						origApplied = val
 					}
 
-					if val, ok := retCfg.Annotations[objsetSetId]; !ok || val != "object-set-applier" {
+					if val, ok := retCfg.Annotations[objsetSetID]; !ok || val != "object-set-applier" {
 						errs = append(errs, fmt.Errorf("objectset id not found or incorrect: '%s'", val))
 					}
 					if val, ok := retCfg.Annotations[objectSetOnwerGVK]; !ok || val != "internal.cattle.io/v1alpha1, Kind=objectSetState" {
