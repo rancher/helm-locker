@@ -58,7 +58,7 @@ var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration")
 		Expect(crd.Create(testCtx, cfg)).To(Succeed())
 		go func() {
 			if err := controllers.Register(testCtx, ns, "helm-locker", "node1", clientCmdCfg); err != nil {
-				Fail(fmt.Sprintf("Failed to register controllers %s", err))
+				GinkgoWriter.Write([]byte(fmt.Sprintf("Failed to register controllers: %s", err)))
 			}
 		}()
 	})
