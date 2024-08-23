@@ -57,6 +57,14 @@ var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration")
 
 		Expect(crd.Create(testCtx, cfg)).To(Succeed())
 		go func() {
+			defer func() {
+				// recover from RunOrDie which will always cause a panic on os.Exit
+				r := recover()
+				if r != nil {
+					GinkgoWriter.Write([]byte(fmt.Sprintf("Recovered from panic: %v", r)))
+				}
+			}()
+
 			if err := controllers.Register(testCtx, ns, "helm-locker", "node1", clientCmdCfg); err != nil {
 				GinkgoWriter.Write([]byte(fmt.Sprintf("Failed to register controllers: %s", err)))
 			}
