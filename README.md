@@ -1,3 +1,6 @@
+> [!WARNING]  
+> This repo will soon be archived. The code here is now maintained as a [sub-package](https://github.com/rancher/helm-project-operator/tree/main/pkg/helm-locker) of the [`helm-project-operator`](https://github.com/rancher/helm-project-operator) repository.
+
 helm-locker
 ========
 
