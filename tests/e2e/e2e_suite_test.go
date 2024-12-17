@@ -10,9 +10,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	lockerv1alpha1 "github.com/rancher/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
+	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	env "github.com/caarlos0/env/v11"
 	"github.com/kralicky/kmatch"
@@ -31,10 +33,11 @@ func TestE2e(t *testing.T) {
 }
 
 var (
-	k8sClient client.Client
-	cfg       *rest.Config
-	testCtx   context.Context
-	clientSet *kubernetes.Clientset
+	k8sClient    client.Client
+	cfg          *rest.Config
+	testCtx      context.Context
+	clientSet    *kubernetes.Clientset
+	clientCmdCfg clientcmd.ClientConfig
 )
 
 type TestSpec struct {
@@ -62,6 +65,7 @@ var _ = BeforeSuite(func() {
 	DeferCleanup(func() {
 		ca()
 	})
+	clientCmdCfg = kubeconfig.GetNonInteractiveClientConfig(ts.Kubeconfig)
 
 	testCtx = ctxCa
 	newCfg, err := config.GetConfig()
@@ -74,6 +78,7 @@ var _ = BeforeSuite(func() {
 	newK8sClient, err := client.New(cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred(), "Could not initialize kubernetes client")
 	k8sClient = newK8sClient
+
 	lockerv1alpha1.AddToScheme(k8sClient.Scheme())
 	apiextensionsv1.AddToScheme(k8sClient.Scheme())
 	kmatch.SetDefaultObjectClient(k8sClient)
