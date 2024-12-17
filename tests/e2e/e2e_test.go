@@ -7,8 +7,8 @@ import (
 
 	. "github.com/kralicky/kmatch"
 	"github.com/rancher/helm-locker/pkg/apis/helm.cattle.io/v1alpha1"
-	"github.com/rancher/helm-locker/pkg/controllers"
 	"github.com/rancher/helm-locker/pkg/crd"
+	"github.com/rancher/helm-locker/pkg/operator"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -64,10 +64,13 @@ var _ = Describe("E2E helm locker operator tests", Ordered, Label("integration")
 					GinkgoWriter.Write([]byte(fmt.Sprintf("Recovered from panic: %v", r)))
 				}
 			}()
-
-			if err := controllers.Register(testCtx, ns, "helm-locker", "node1", clientCmdCfg); err != nil {
-				GinkgoWriter.Write([]byte(fmt.Sprintf("Failed to register controllers: %s", err)))
-			}
+			operator.Run(testCtx, operator.ControllerOptions{
+				ClientConfig:   clientCmdCfg,
+				Namespace:      ns,
+				ControllerName: "helm-locker",
+				NodeName:       "node1",
+				PprofEnabled:   false,
+			})
 		}()
 	})
 

@@ -2,17 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"net/http"
 	_ "net/http/pprof"
 
-	"github.com/rancher/helm-locker/pkg/controllers"
-	"github.com/rancher/helm-locker/pkg/crd"
+	"github.com/rancher/helm-locker/pkg/operator"
 	_ "github.com/rancher/wrangler/v3/pkg/generated/controllers/apiextensions.k8s.io"
 	_ "github.com/rancher/wrangler/v3/pkg/generated/controllers/networking.k8s.io"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
-	"github.com/rancher/wrangler/v3/pkg/ratelimit"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -23,36 +18,22 @@ func BuildHelmLockerCommand() *cobra.Command {
 	var namespace string
 	var controllerName string
 	var nodeName string
-
+	var pprofEnabled bool
 	viper.AutomaticEnv()
 	cmd := &cobra.Command{
 		Use: "helm-locker",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if len(namespace) == 0 {
-				return fmt.Errorf("helm-locker can only be started in a single namespace")
-			}
-
-			go func() {
-				log.Println(http.ListenAndServe("localhost:6060", nil))
-			}()
-
 			cfg := kubeconfig.GetNonInteractiveClientConfig(kubeconfigVar)
-			clientConfig, err := cfg.ClientConfig()
-			if err != nil {
+			options := operator.ControllerOptions{
+				Namespace:      namespace,
+				ControllerName: controllerName,
+				NodeName:       nodeName,
+				ClientConfig:   cfg,
+				PprofEnabled:   pprofEnabled,
+			}
+			if err := operator.Run(cmd.Context(), options); err != nil {
 				return err
 			}
-			clientConfig.RateLimiter = ratelimit.None
-
-			ctx := cmd.Context()
-			if err := crd.Create(ctx, clientConfig); err != nil {
-				return err
-			}
-
-			if err := controllers.Register(ctx, namespace, controllerName, nodeName, cfg); err != nil {
-				return err
-			}
-
-			<-cmd.Context().Done()
 			return nil
 		},
 	}
@@ -61,6 +42,7 @@ func BuildHelmLockerCommand() *cobra.Command {
 	flags.StringVar(&namespace, "namespace", "cattle-helm-system", "Namespace to watch for HelmReleases")
 	flags.StringVar(&controllerName, "controller-name", "helm-locker", "Unique name to identify this controller that is added to all HelmReleases tracked by this controller")
 	flags.StringVar(&nodeName, "node-name", "", "Name of the node this controller is running on")
+	flags.BoolVarP(&pprofEnabled, "pprof", "p", false, "flag to enable pprof on port 6060")
 
 	viper.BindPFlag("kubeconfig", flags.Lookup("KUBECONFIG"))
 	viper.BindPFlag("namespace", flags.Lookup("NAMESPACE"))

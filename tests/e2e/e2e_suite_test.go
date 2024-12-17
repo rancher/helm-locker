@@ -65,7 +65,6 @@ var _ = BeforeSuite(func() {
 	DeferCleanup(func() {
 		ca()
 	})
-
 	clientCmdCfg = kubeconfig.GetNonInteractiveClientConfig(ts.Kubeconfig)
 
 	testCtx = ctxCa
@@ -79,6 +78,7 @@ var _ = BeforeSuite(func() {
 	newK8sClient, err := client.New(cfg, client.Options{})
 	Expect(err).NotTo(HaveOccurred(), "Could not initialize kubernetes client")
 	k8sClient = newK8sClient
+
 	lockerv1alpha1.AddToScheme(k8sClient.Scheme())
 	apiextensionsv1.AddToScheme(k8sClient.Scheme())
 	kmatch.SetDefaultObjectClient(k8sClient)
